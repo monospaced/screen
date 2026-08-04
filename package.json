@@ -1,0 +1,33 @@
+{
+  "name": "screen",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "shared/screen-core.js",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "lint:css": "stylelint \"**/*.css\" --allow-empty-input",
+    "lint:js": "eslint .",
+    "lint": "eslint . && stylelint \"**/*.css\" --allow-empty-input",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@monospaced/set-assets": "^0.9.0",
+    "@monospaced/set-core": "^0.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@monospaced/set-config": "^0.9.0",
+    "@monospaced/set-skills": "^0.9.0",
+    "@monospaced/set-tokens": "^0.9.0",
+    "eslint": "^10.8.0",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6",
+    "stylelint": "^17.14.1",
+    "vite": "^8.2.0"
+  }
+}

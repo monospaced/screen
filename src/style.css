@@ -1,0 +1,22 @@
+.screen {
+  canvas {
+    background-color: var(--set-color-background-subtle);
+    block-size: auto;
+    display: block;
+    margin-inline: auto;
+    max-inline-size: 100%;
+  }
+
+  canvas[data-draggable] {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  canvas[data-draggable].dragging {
+    cursor: grabbing;
+  }
+
+  input[type="file"] {
+    display: none;
+  }
+}
