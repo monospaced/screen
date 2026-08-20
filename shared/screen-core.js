@@ -30,33 +30,30 @@
       [66, 68, 68],
     ], // neutral.1200 #0b0c0c -> neutral.800 #424444  (K)
   };
-  // Light experiment: reversed logic — the shadow endpoint is the *darkest*
-  // pixel the image can contain, floored so the light-mode *default* text
-  // #0b0c0c keeps >= 4.5:1 (WCAG AA) anywhere on the image (mnsp light,
-  // default + brand themes): the 400 shadows sit at 11.8-12.6:1, and the
-  // hover teal #007c7c 4.5:1 guarantee of the dark treatment is relaxed to
-  // AA large-text (>= 3:1) — full AA vs the hover is impossible with a
-  // visible image, since #007c7c only reaches 4.76:1 on pure white (the
-  // passing pair, 200 -> 100, is a 1.03:1 separation — invisible).
-  // 400 -> 100 separation is 1.49:1 vs the dark treatment's 1.75-2:1;
-  // 500 -> 100 (sep ~2:1, hover fails even large-text) is the alternative.
+  // Light variant: reversed logic — the shadow endpoint is the *darkest*
+  // pixel the image can contain. The 500 shadows keep the light-mode default
+  // text #0b0c0c >= 4.5:1 (WCAG AA) anywhere on the image (8.2-9.3:1) in the
+  // mnsp light default + brand themes, and match the dark treatment's ~2:1
+  // endpoint separation. Unlike the dark treatment, the neutral hover
+  // #007c7c is not guaranteed — it only reaches 4.76:1 on pure white, so no
+  // visible light image can pass it.
   var AXES_LIGHT = {
     cyan: [
-      [145, 220, 220],
+      [94, 194, 194],
       [244, 251, 251],
-    ], // cyan.400 #91dcdc -> cyan.100 #f4fbfb (12.57 vs #0b0c0c, sep 1.49)
+    ], // cyan.500 #5ec2c2 -> cyan.100 #f4fbfb (9.30 vs #0b0c0c, sep 2.01)
     magenta: [
-      [245, 189, 245],
+      [231, 151, 231],
       [253, 248, 253],
-    ], // magenta.400 #f5bdf5 -> magenta.100 #fdf8fd (12.57, sep 1.49)
+    ], // magenta.500 #e797e7 -> magenta.100 #fdf8fd (9.31, sep 2.01)
     yellow: [
-      [211, 211, 141],
+      [183, 183, 84],
       [250, 250, 244],
-    ], // yellow.400 #d3d38d -> yellow.100 #fafaf4 (12.57, sep 1.49)
+    ], // yellow.500 #b7b754 -> yellow.100 #fafaf4 (9.25, sep 2.02)
     neutral: [
-      [199, 201, 201],
+      [165, 168, 167],
       [248, 251, 251],
-    ], // neutral.400 #c7c9c9 -> neutral.100 #f8fbfb (11.78, sep 1.60)
+    ], // neutral.500 #a5a8a7 -> neutral.100 #f8fbfb (8.17, sep 2.30)
   };
   var GAMMA = 0.7,
     BLACK_PCT = 0.02,

@@ -13,11 +13,11 @@ import {
   renderSetContainer,
   renderSetDivider,
   renderSetHeading,
-  renderSetIcon,
   renderSetInline,
   renderSetLightswitch,
   renderSetLink,
   renderSetLogo,
+  renderSetMenu,
   renderSetPage,
   renderSetRadios,
   renderSetRoot,
@@ -93,23 +93,24 @@ function toolbar() {
     tone: "neutral",
   });
   const fileInput = `<input type="file" id="file" accept="image/*" />`;
-  const download = renderSetLink({
-    appearance: "outline",
+  const download = renderSetMenu({
+    id: "download",
     size: "sm",
-    labelVisibility: "hiddenBelowTablet",
-    href: "#",
-    download: true,
-    id: "dl",
-    icon: renderSetIcon({ name: "download", size: "fill" }),
-    label: "Download",
-    tone: "neutral",
+    align: "end",
+    triggerIcon: "download",
+    triggerLabel: "Download",
+    triggerLabelVisibility: "hiddenBelowTablet",
+    items: [
+      { id: "png", label: "PNG" },
+      { id: "svg", label: "SVG" },
+    ],
   });
   const right = renderSetInline({
     gap: "xs",
     children:
+      download +
       choose +
       fileInput +
-      download +
       renderSetLightswitch({ appearance: "outline", size: "sm" }),
   });
   return renderSetInline({
