@@ -9,6 +9,7 @@
 import {
   renderSetBox,
   renderSetButton,
+  renderSetCheckbox,
   renderSetContainer,
   renderSetDivider,
   renderSetHeading,
@@ -57,6 +58,12 @@ function sidebar() {
           size: "sm",
           value: "default",
           radios: RATIOS.map(({ key, label }) => ({ label, value: key })),
+        }) +
+        renderSetCheckbox({
+          id: "light",
+          name: "light",
+          label: "Light",
+          size: "sm",
         }),
     }),
   });

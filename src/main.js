@@ -25,6 +25,7 @@ const RES = 640,
   OG_W = 1200,
   OG_H = 630;
 let axis = "cyan",
+  light = false,
   ratio = "default",
   img = null,
   baseName = "image";
@@ -44,6 +45,10 @@ document.getElementById("axis").addEventListener("change", (e) => {
 });
 document.getElementById("ratio").addEventListener("change", (e) => {
   ratio = e.target.value;
+  if (img) render();
+});
+document.getElementById("light").addEventListener("change", (e) => {
+  light = e.target.checked;
   if (img) render();
 });
 
@@ -218,7 +223,7 @@ function render(updateDl = true) {
     rgb[i * 3 + 2] = src[i * 4 + 2];
   }
 
-  const out = screenCore(rgb, Wc, Hc, axis);
+  const out = screenCore(rgb, Wc, Hc, axis, light);
 
   const grid = gx.createImageData(Wc, Hc);
   for (let i = 0; i < Wc * Hc; i++) {
@@ -255,7 +260,7 @@ function updateDownload() {
     const u = URL.createObjectURL(b);
     dl.href = u;
     dl.dataset.url = u;
-    dl.download = `${baseName}--${axis}${ratio === "default" ? "" : `--${ratio}`}.png`;
+    dl.download = `${baseName}--${axis}${light ? "--light" : ""}${ratio === "default" ? "" : `--${ratio}`}.png`;
     dl.setAttribute("aria-disabled", "false");
   }, "image/png");
 }
