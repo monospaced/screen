@@ -59,10 +59,11 @@ highlight). The caps are chosen so that brightest pixel keeps both dark-mode for
 So OG/hero text can sit anywhere over the image and pass.
 
 **Light:** reversed — the shadow endpoint is the **darkest pixel the image can ever
-contain**, floored so the light-mode default text `#0b0c0c` keeps **≥ 4.5:1 (WCAG AA)**
-anywhere on the image (8.2–9.3:1, default and brand themes). The neutral hover `#007c7c`
-carries no such guarantee: it only reaches 4.76:1 on pure white, so no visible light image
-can pass it — the light variant guarantees default text only.
+contain**, floored so the light-mode prose text `#0e0f0f` keeps **≥ 4.5:1 (WCAG AA)**
+anywhere on the image (8.0–9.1:1, default and brand themes) — and with it the darker
+default text `#0b0c0c`. The neutral hover `#007c7c` carries no such guarantee: it only
+reaches 4.76:1 on pure white, so no visible light image can pass it — the light variant
+guarantees body text, not interactive states.
 
 ## Fixed decisions (settled, do not re-litigate without reason)
 

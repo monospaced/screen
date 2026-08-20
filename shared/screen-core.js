@@ -31,12 +31,13 @@
     ], // neutral.1200 #0b0c0c -> neutral.800 #424444  (K)
   };
   // Light variant: reversed logic — the shadow endpoint is the *darkest*
-  // pixel the image can contain. The 500 shadows keep the light-mode default
-  // text #0b0c0c >= 4.5:1 (WCAG AA) anywhere on the image (8.2-9.3:1) in the
-  // mnsp light default + brand themes, and match the dark treatment's ~2:1
-  // endpoint separation. Unlike the dark treatment, the neutral hover
-  // #007c7c is not guaranteed — it only reaches 4.76:1 on pure white, so no
-  // visible light image can pass it.
+  // pixel the image can contain. The 500 shadows keep the light-mode prose
+  // text #0e0f0f (and with it the darker default text #0b0c0c) >= 4.5:1
+  // (WCAG AA) anywhere on the image (8.0-9.1:1) in the mnsp light default +
+  // brand themes, and match the dark treatment's ~2:1 endpoint separation.
+  // Unlike the dark treatment, the neutral hover #007c7c is not guaranteed —
+  // it only reaches 4.76:1 on pure white, so no visible light image can pass
+  // it.
   var AXES_LIGHT = {
     cyan: [
       [94, 194, 194],
