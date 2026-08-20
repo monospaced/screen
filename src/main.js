@@ -26,13 +26,13 @@ defineSetSidebar();
 defineSetLightswitch();
 defineSetMenu();
 
-const { screenCore, SCREEN_AXES, SCREEN_AXES_LIGHT } = globalThis;
+const { screenCore, SCREEN_PAIRS } = globalThis;
 const RES = 640,
   UPSCALE = 2,
   OG_W = 1200,
   OG_H = 630;
 let axis = "cyan",
-  light = false,
+  tone = "dark",
   ratio = "default",
   img = null,
   baseName = "image";
@@ -68,8 +68,8 @@ document.getElementById("ratio").addEventListener("change", (e) => {
   ratio = e.target.value;
   if (img) render();
 });
-document.getElementById("light").addEventListener("change", (e) => {
-  light = e.target.checked;
+document.getElementById("tone").addEventListener("change", (e) => {
+  tone = e.target.value;
   if (img) render();
 });
 
@@ -240,7 +240,7 @@ function render(updateDl = true) {
   }
   lastRender = { rgb, Wc, Hc, up };
 
-  const out = screenCore(rgb, Wc, Hc, axis, light);
+  const out = screenCore(rgb, Wc, Hc, axis, tone);
 
   const grid = gx.createImageData(Wc, Hc);
   for (let i = 0; i < Wc * Hc; i++) {
@@ -360,11 +360,11 @@ function blobToDataURL(blob) {
   });
 }
 
-// Re-treat the current crop for one endpoint variant, as 1-bit PNG bytes.
-function variantPNG(lightVariant) {
+// Re-treat the current crop for one tone, as 1-bit PNG bytes.
+function variantPNG(variantTone) {
   const { rgb, Wc, Hc, up } = lastRender;
-  const out = screenCore(rgb, Wc, Hc, axis, lightVariant);
-  const pair = (lightVariant ? SCREEN_AXES_LIGHT : SCREEN_AXES)[axis];
+  const out = screenCore(rgb, Wc, Hc, axis, variantTone);
+  const pair = SCREEN_PAIRS[variantTone][axis];
   return encodeScreenPNG(out, Wc, Hc, up, pair);
 }
 
@@ -385,7 +385,7 @@ async function adaptiveSvg() {
   const W = Wc * up,
     H = Hc * up;
   const [dark, lightVar] = await Promise.all(
-    [variantPNG(false), variantPNG(true)].map((p) =>
+    [variantPNG("dark"), variantPNG("light")].map((p) =>
       p.then((bytes) =>
         blobToDataURL(new Blob([bytes], { type: "image/png" })),
       ),
@@ -407,13 +407,13 @@ let dlToken = 0;
 async function updateDownload() {
   const token = ++dlToken;
   const suffix = ratio === "default" ? "" : `--${ratio}`;
-  const [png, svg] = await Promise.all([variantPNG(light), adaptiveSvg()]);
+  const [png, svg] = await Promise.all([variantPNG(tone), adaptiveSvg()]);
   if (token !== dlToken) return;
   for (const [id, blob, name] of [
     [
       "png",
       new Blob([png], { type: "image/png" }),
-      `${baseName}--${axis}${light ? "--light" : ""}${suffix}.png`,
+      `${baseName}--${axis}${tone === "dark" ? "" : `--${tone}`}${suffix}.png`,
     ],
     [
       "svg",
