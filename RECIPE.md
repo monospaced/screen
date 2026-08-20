@@ -1,8 +1,8 @@
 # Set — Brand Image Treatment
 
-The signature treatment that turns a photograph into a **brand image**: a dark,
-duotone, ordered-dither bitmap on the cyan (or neutral) axis. It reads as an early
-computer display — terminals, IDEs, 1-bit screens — which is the point.
+The signature treatment that turns a photograph into a **brand image**: a dark
+(or light), duotone, ordered-dither bitmap on the cyan (or neutral) axis. It reads as
+an early computer display — terminals, IDEs, 1-bit screens — which is the point.
 
 ## When to use it
 
@@ -35,26 +35,34 @@ Applied in order:
 
 ### Endpoints (from the palette)
 
-The four CMYK inks — cyan, magenta, yellow, and neutral (K):
+The four CMYK inks — cyan, magenta, yellow, and neutral (K). The dark endpoints are
+the default; the light endpoints are the **light variant** (the "Light" toggle), for
+light-mode contexts:
 
-| Axis    | Shadow (0)               | Highlight (1)            |
-| ------- | ------------------------ | ------------------------ |
-| Cyan    | `cyan.1200` `#001919`    | `cyan.1000` `#004848`    |
-| Magenta | `magenta.1200` `#2e002e` | `magenta.1000` `#770077` |
-| Yellow  | `yellow.1200` `#171700`  | `yellow.1000` `#424202`  |
-| Neutral | `neutral.1200` `#0b0c0c` | `neutral.800` `#424444`  |
+| Axis    | Dark shadow (0)          | Dark highlight (1)       | Light shadow (0)        | Light highlight (1)     |
+| ------- | ------------------------ | ------------------------ | ----------------------- | ----------------------- |
+| Cyan    | `cyan.1200` `#001919`    | `cyan.1000` `#004848`    | `cyan.500` `#5ec2c2`    | `cyan.100` `#f4fbfb`    |
+| Magenta | `magenta.1200` `#2e002e` | `magenta.1000` `#770077` | `magenta.500` `#e797e7` | `magenta.100` `#fdf8fd` |
+| Yellow  | `yellow.1200` `#171700`  | `yellow.1000` `#424202`  | `yellow.500` `#b7b754`  | `yellow.100` `#fafaf4`  |
+| Neutral | `neutral.1200` `#0b0c0c` | `neutral.800` `#424444`  | `neutral.500` `#a5a8a7` | `neutral.100` `#f8fbfb` |
 
-### Why those highlight caps (WCAG)
+### Why those endpoint caps (WCAG)
 
-The highlight endpoint is the **brightest pixel the image can ever contain** (2-level → every
-pixel is one of the two endpoints; the ordered pattern can't exceed the highlight). The caps
-are chosen so that brightest pixel keeps both dark-mode foregrounds at **≥ 4.5:1 (WCAG AA)**
-anywhere on the image, with no legibility shims:
+**Dark:** the highlight endpoint is the **brightest pixel the image can ever contain**
+(2-level → every pixel is one of the two endpoints; the ordered pattern can't exceed the
+highlight). The caps are chosen so that brightest pixel keeps both dark-mode foregrounds at
+**≥ 4.5:1 (WCAG AA)** anywhere on the image, with no legibility shims:
 
 - `#c8c9c9` (neutral hover, default theme) — cyan 6.3 · magenta 6.2 · yellow 6.3 · neutral 5.9
 - `rgba(255,255,255,.8)` (brand theme) — cyan 7.3 · magenta 6.9 · yellow 7.4 · neutral 7.0
 
 So OG/hero text can sit anywhere over the image and pass.
+
+**Light:** reversed — the shadow endpoint is the **darkest pixel the image can ever
+contain**, floored so the light-mode default text `#0b0c0c` keeps **≥ 4.5:1 (WCAG AA)**
+anywhere on the image (8.2–9.3:1, default and brand themes). The neutral hover `#007c7c`
+carries no such guarantee: it only reaches 4.76:1 on pure white, so no visible light image
+can pass it — the light variant guarantees default text only.
 
 ## Fixed decisions (settled, do not re-litigate without reason)
 
@@ -115,5 +123,15 @@ This is the chosen path.
 UMD, so a Node consumer could require it again if batch processing is ever needed).
 
 The front end is the **web tool** (`src/`, `pnpm dev`): treat an image in the browser —
-pick the colour axis and an aspect-ratio preset (auto, 4:5 … 21:9 at 1280 wide, or the
-fixed 1200×630 OG card), drag the canvas to choose the crop, download the PNG.
+pick the colour axis, toggle the light variant, pick an aspect-ratio preset (auto,
+4:5 … 21:9 at 1280 wide, or the fixed 1200×630 OG card), drag the canvas to choose the
+crop, then download.
+
+Two export formats, both encoded as 1-bit indexed PNGs (exact 2-entry palette, so the
+WCAG guarantees are byte-provable):
+
+- **PNG** — the current variant.
+- **Adaptive SVG** — both variants embedded, one file. Unreferenced, it follows the
+  system scheme (`prefers-color-scheme`); referenced with a fragment
+  (`…svg#dark` / `…svg#light`) that variant is forced via `:target`, which is how a
+  Set page selects the variant its theme cascade resolves to.

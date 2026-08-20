@@ -4,8 +4,8 @@
  *
  * screenCore(rgb, W, H, axis, light)
  *   rgb   : Uint8 RGB buffer, length W*H*3, already resized to the 640 grid
- *   axis  : "cyan" | "neutral"
- *   light : true for the light-endpoint experiment (default dark)
+ *   axis  : "cyan" | "magenta" | "yellow" | "neutral"
+ *   light : true for the light endpoint pairs (default dark)
  *   ->    : Uint8ClampedArray RGB, length W*H*3, treated (2 palette colours only)
  *
  * Pipeline: luminance -> auto-levels (2/98 pct) -> gamma 0.7 -> 8x8 Bayer, 2-level -> map.
@@ -94,7 +94,8 @@
 
   function screenCore(rgb, W, H, axis, light) {
     var pair = (light ? AXES_LIGHT : AXES)[axis];
-    if (!pair) throw new Error("axis must be 'cyan' or 'neutral'");
+    if (!pair)
+      throw new Error("axis must be 'cyan', 'magenta', 'yellow' or 'neutral'");
     var shadow = pair[0],
       high = pair[1],
       N = W * H;

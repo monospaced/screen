@@ -4,10 +4,12 @@
 
 Screen is Monospaced's brand image tool.
 
-Turns a photograph into a dark, 2-level ordered-dither bitmap on the cyan, magenta,
-yellow or neutral palette axis — it reads as an early computer display.
+Turns a photograph into a dark (or light), 2-level ordered-dither bitmap on the cyan,
+magenta, yellow or neutral palette axis — it reads as an early computer display.
 
-Pick a colour axis and an aspect ratio, drag to place the crop, download the PNG. Everything runs in the browser on a `<canvas>`; nothing is uploaded.
+Pick a colour axis and an aspect ratio, drag to place the crop, then download the PNG —
+or an adaptive SVG that carries both the dark and light variants. Everything runs in the
+browser on a `<canvas>`; nothing is uploaded.
 
 See [`RECIPE.md`](./RECIPE.md) for the full spec. The
 treatment itself is implemented in `shared/screen-core.js`.

@@ -273,11 +273,10 @@ function render(updateDl = true) {
 
 // ---- 1-bit indexed PNG encoder ----
 // Canvas toDataURL always emits 32-bit RGBA; for a 2-colour image a 1-bit
-// indexed PNG is ~4x smaller (and being our own encoder, the exact palette
-// is byte-provable — UPNG.js was evaluated and its quantiser does not
-// preserve the exact endpoint colours, which would void the WCAG guarantee).
-// Deflate comes from the native CompressionStream; everything else is a
-// 2-entry PLTE and filter-0 scanlines.
+// indexed PNG is ~4x smaller, and writing the PLTE ourselves keeps the
+// exact endpoint colours (the WCAG guarantee) byte-provable. Deflate comes
+// from the native CompressionStream; everything else is a 2-entry PLTE and
+// filter-0 scanlines.
 const CRC_TABLE = (() => {
   const t = new Int32Array(256);
   for (let n = 0; n < 256; n++) {
@@ -374,7 +373,7 @@ function variantPNG(lightVariant) {
 // (light base, prefers-dark flips — the dark-favicon technique, works via
 // <img>). Referenced with a fragment (…svg#dark / …svg#light) the :target
 // rules override the scheme and force that variant — Set's own theme cascade
-// picks the fragment, so all Set awareness lives in Set, not here.
+// picks the fragment, so this file carries no Set-specific selectors.
 const SCREEN_THEME_CSS =
   `.screen-dark{display:none}` +
   `@media (prefers-color-scheme:dark){.screen-dark{display:inline}.screen-light{display:none}}` +
