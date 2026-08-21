@@ -1,8 +1,8 @@
 # Set — Brand Image Treatment
 
-The signature treatment that turns a photograph into a **brand image**: a dark
-(or light), duotone, ordered-dither bitmap on the cyan (or neutral) axis. It reads as
-an early computer display — terminals, IDEs, 1-bit screens — which is the point.
+The signature treatment that turns a photograph into a **brand image**: a duotone,
+ordered-dither bitmap on the cyan (or neutral) axis. It reads as an early computer
+display — terminals, IDEs, 1-bit screens — which is the point.
 
 ## When to use it
 
@@ -35,16 +35,37 @@ Applied in order:
 
 ### Endpoints (from the palette)
 
-The four CMYK inks — cyan, magenta, yellow, and neutral (K). The dark endpoints are
-the default; the light endpoints are the **light variant** (the "Light" toggle), for
-light-mode contexts:
+The four CMYK inks — cyan, magenta, yellow, and neutral (K) — in three tones:
+**dark** (the default), **light** (for light-mode contexts) and **mid** (the ramp
+segment between the two, for imagery with no text over it, sitting acceptably on both
+light and dark surroundings).
 
-| Axis    | Dark shadow (0)          | Dark highlight (1)       | Light shadow (0)        | Light highlight (1)     |
-| ------- | ------------------------ | ------------------------ | ----------------------- | ----------------------- |
-| Cyan    | `cyan.1200` `#001919`    | `cyan.1000` `#004848`    | `cyan.500` `#5ec2c2`    | `cyan.100` `#f4fbfb`    |
-| Magenta | `magenta.1200` `#2e002e` | `magenta.1000` `#770077` | `magenta.500` `#e797e7` | `magenta.100` `#fdf8fd` |
-| Yellow  | `yellow.1200` `#171700`  | `yellow.1000` `#424202`  | `yellow.500` `#b7b754`  | `yellow.100` `#fafaf4`  |
-| Neutral | `neutral.1200` `#0b0c0c` | `neutral.800` `#424444`  | `neutral.500` `#a5a8a7` | `neutral.100` `#f8fbfb` |
+**Dark** (default):
+
+| Axis    | Shadow (0)               | Highlight (1)            |
+| ------- | ------------------------ | ------------------------ |
+| Cyan    | `cyan.1200` `#001919`    | `cyan.1000` `#004848`    |
+| Magenta | `magenta.1200` `#2e002e` | `magenta.1000` `#770077` |
+| Yellow  | `yellow.1200` `#171700`  | `yellow.1000` `#424202`  |
+| Neutral | `neutral.1200` `#0b0c0c` | `neutral.800` `#424444`  |
+
+**Mid:**
+
+| Axis    | Shadow (0)              | Highlight (1)           |
+| ------- | ----------------------- | ----------------------- |
+| Cyan    | `cyan.900` `#006161`    | `cyan.600` `#3ba9a9`    |
+| Magenta | `magenta.900` `#912691` | `magenta.600` `#d478d4` |
+| Yellow  | `yellow.900` `#5a5a01`  | `yellow.600` `#9e9e37`  |
+| Neutral | `neutral.700` `#646766` | `neutral.500` `#a5a8a7` |
+
+**Light:**
+
+| Axis    | Shadow (0)              | Highlight (1)           |
+| ------- | ----------------------- | ----------------------- |
+| Cyan    | `cyan.500` `#5ec2c2`    | `cyan.100` `#f4fbfb`    |
+| Magenta | `magenta.500` `#e797e7` | `magenta.100` `#fdf8fd` |
+| Yellow  | `yellow.500` `#b7b754`  | `yellow.100` `#fafaf4`  |
+| Neutral | `neutral.500` `#a5a8a7` | `neutral.100` `#f8fbfb` |
 
 ### Why those endpoint caps (WCAG)
 
@@ -64,6 +85,11 @@ anywhere on the image (8.0–9.1:1, default and brand themes) — and with it th
 default text `#0b0c0c`. The neutral hover `#007c7c` carries no such guarantee: it only
 reaches 4.76:1 on pure white, so no visible light image can pass it — the light variant
 guarantees body text, not interactive states.
+
+**Mid:** no foreground guarantee — mid is for imagery with no text over it. The
+endpoints take the ramp segment between the dark and light ranges (900 → 600 on the
+inks; the neutral ramp is spread too evenly for its between-segment to match the ink
+separations, so neutral mid shares a boundary step with light at 700 → 500).
 
 ## Fixed decisions (settled, do not re-litigate without reason)
 
@@ -124,15 +150,15 @@ This is the chosen path.
 UMD, so a Node consumer could require it again if batch processing is ever needed).
 
 The front end is the **web tool** (`src/`, `pnpm dev`): treat an image in the browser —
-pick the colour axis, toggle the light variant, pick an aspect-ratio preset (auto,
-4:5 … 21:9 at 1280 wide, or the fixed 1200×630 OG card), drag the canvas to choose the
+pick the colour axis, an aspect-ratio preset (auto, 4:5 … 21:9 at 1280 wide, or the
+fixed 1200×630 OG card) and a tone (dark, mid or light), drag the canvas to choose the
 crop, then download.
 
 Two export formats, both encoded as 1-bit indexed PNGs (exact 2-entry palette, so the
 WCAG guarantees are byte-provable):
 
-- **PNG** — the current variant.
-- **Adaptive SVG** — both variants embedded, one file. Unreferenced, it follows the
-  system scheme (`prefers-color-scheme`); referenced with a fragment
-  (`…svg#dark` / `…svg#light`) that variant is forced via `:target`, which is how a
-  Set page selects the variant its theme cascade resolves to.
+- **PNG** — the current tone.
+- **Adaptive SVG** — the dark and light tones embedded, one file (mid is PNG-only).
+  Unreferenced, it follows the system scheme (`prefers-color-scheme`); referenced with
+  a fragment (`…svg#dark` / `…svg#light`) that tone is forced via `:target`, which is
+  how a Set page selects the tone its theme cascade resolves to.
