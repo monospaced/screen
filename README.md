@@ -1,6 +1,6 @@
 # Screen
 
-![Example image processed by Screen](https://res.cloudinary.com/monospaced/image/upload/v1785950420/2018-04-20_15.28.26--cyan--3x2_imnudx.png)
+![Example image processed by Screen](https://res.cloudinary.com/monospaced/image/upload/v1787299595/2018-04-20_15.28.26--cyan--mid--3x2_lixksu.png)
 
 Screen is Monospaced's brand image tool.
 
