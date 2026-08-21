@@ -16,14 +16,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@monospaced/set-assets": "^0.10.1",
-    "@monospaced/set-core": "^0.10.1"
+    "@monospaced/set-assets": "^0.11.0",
+    "@monospaced/set-core": "^0.11.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@monospaced/set-config": "^0.10.1",
-    "@monospaced/set-skills": "^0.10.1",
-    "@monospaced/set-tokens": "^0.10.1",
+    "@monospaced/set-config": "^0.11.0",
+    "@monospaced/set-skills": "^0.11.0",
+    "@monospaced/set-tokens": "^0.11.0",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
     "prettier": "^3.9.6",

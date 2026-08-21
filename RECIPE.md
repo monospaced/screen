@@ -53,9 +53,9 @@ light and dark surroundings).
 
 | Axis    | Shadow (0)              | Highlight (1)           |
 | ------- | ----------------------- | ----------------------- |
-| Cyan    | `cyan.900` `#006161`    | `cyan.600` `#3ba9a9`    |
-| Magenta | `magenta.900` `#912691` | `magenta.600` `#d478d4` |
-| Yellow  | `yellow.900` `#5a5a01`  | `yellow.600` `#9e9e37`  |
+| Cyan    | `cyan.900` `#006464`    | `cyan.600` `#3ba9a9`    |
+| Magenta | `magenta.900` `#952795` | `magenta.600` `#d478d4` |
+| Yellow  | `yellow.900` `#5c5d01`  | `yellow.600` `#9e9e37`  |
 | Neutral | `neutral.700` `#646766` | `neutral.500` `#a5a8a7` |
 
 **Light:**
@@ -86,10 +86,13 @@ default text `#0b0c0c`. The neutral hover `#007c7c` carries no such guarantee: i
 reaches 4.76:1 on pure white, so no visible light image can pass it — the light variant
 guarantees body text, not interactive states.
 
-**Mid:** no foreground guarantee — mid is for imagery with no text over it. The
-endpoints take the ramp segment between the dark and light ranges (900 → 600 on the
-inks; the neutral ramp is spread too evenly for its between-segment to match the ink
-separations, so neutral mid shares a boundary step with light at 700 → 500).
+**Mid:** no text guarantee — mid is for imagery with no text over it. The endpoints
+take the ramp segment between the dark and light ranges (900 → 600 on the inks; the
+neutral ramp is spread too evenly for its between-segment to match the ink separations,
+so neutral mid shares a boundary step with light at 700 → 500). One non-text guarantee
+holds by construction: **black keeps ≥ 3:1 against both endpoints** (3.0 inks · 3.7
+neutral — the 900 primitives are floored for exactly this), meeting WCAG 1.4.11
+non-text contrast — so the black logo mark can sit on mid imagery.
 
 ## Fixed decisions (settled, do not re-litigate without reason)
 

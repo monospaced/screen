@@ -59,24 +59,26 @@
   // Mid variant: the ramp segment between the dark and light ranges (inks:
   // dark takes 1200-1000 and light 500-100, so mid is 900-600) — for imagery
   // with no text over it, sitting acceptably on both light and dark
-  // surroundings. No WCAG foreground guarantee. PNG export only (the
-  // adaptive SVG embeds dark + light). The neutral ramp is spread too evenly
-  // for its strict between-segment (700-600, 1.66) to match the ink
-  // separations (~2.56), so neutral mid shares its highlight step with the
-  // light shadow: 700-500 at 2.38.
+  // surroundings. No text guarantee, but black keeps >= 3:1 against both
+  // endpoints (the 900 primitives are floored for exactly this) — WCAG
+  // 1.4.11, so the black logo mark can sit on mid imagery. PNG export only
+  // (the adaptive SVG embeds dark + light). The neutral ramp is spread too
+  // evenly for its strict between-segment (700-600, 1.66) to match the ink
+  // separations, so neutral mid shares its highlight step with the light
+  // shadow: 700-500 at 2.38.
   var AXES_MID = {
     cyan: [
-      [0, 97, 97],
+      [0, 100, 100],
       [59, 169, 169],
-    ], // cyan.900 #006161 -> cyan.600 #3ba9a9 (sep 2.58)
+    ], // cyan.900 #006464 -> cyan.600 #3ba9a9 (sep 2.47)
     magenta: [
-      [145, 38, 145],
+      [149, 39, 149],
       [212, 120, 212],
-    ], // magenta.900 #912691 -> magenta.600 #d478d4 (sep 2.57)
+    ], // magenta.900 #952795 -> magenta.600 #d478d4 (sep 2.48)
     yellow: [
-      [90, 90, 1],
+      [92, 93, 1],
       [158, 158, 55],
-    ], // yellow.900 #5a5a01 -> yellow.600 #9e9e37 (sep 2.55)
+    ], // yellow.900 #5c5d01 -> yellow.600 #9e9e37 (sep 2.45)
     neutral: [
       [100, 103, 102],
       [165, 168, 167],
