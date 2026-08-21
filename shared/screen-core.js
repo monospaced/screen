@@ -2,10 +2,11 @@
  * Screen — Set brand image treatment (shared core).
  * Pure JS, no dependencies. Used by the web tool (browser + Canvas); UMD so Node can require it too.
  *
- * screenCore(rgb, W, H, axis)
- *   rgb  : Uint8 RGB buffer, length W*H*3, already resized to the 640 grid
- *   axis : "cyan" | "neutral"
- *   ->   : Uint8ClampedArray RGB, length W*H*3, treated (2 palette colours only)
+ * screenCore(rgb, W, H, axis, tone)
+ *   rgb   : Uint8 RGB buffer, length W*H*3, already resized to the 640 grid
+ *   axis  : "cyan" | "magenta" | "yellow" | "neutral"
+ *   tone  : "dark" (default) | "mid" | "light" — the endpoint pair set
+ *   ->    : Uint8ClampedArray RGB, length W*H*3, treated (2 palette colours only)
  *
  * Pipeline: luminance -> auto-levels (2/98 pct) -> gamma 0.7 -> 8x8 Bayer, 2-level -> map.
  */
@@ -29,6 +30,59 @@
       [66, 68, 68],
     ], // neutral.1200 #0b0c0c -> neutral.800 #424444  (K)
   };
+  // Light variant: reversed logic — the shadow endpoint is the *darkest*
+  // pixel the image can contain. The 500 shadows keep the light-mode prose
+  // text #0e0f0f (and with it the darker default text #0b0c0c) >= 4.5:1
+  // (WCAG AA) anywhere on the image (8.0-9.1:1) in the mnsp light default +
+  // brand themes, and match the dark treatment's ~2:1 endpoint separation.
+  // Unlike the dark treatment, the neutral hover #007c7c is not guaranteed —
+  // it only reaches 4.76:1 on pure white, so no visible light image can pass
+  // it.
+  var AXES_LIGHT = {
+    cyan: [
+      [94, 194, 194],
+      [244, 251, 251],
+    ], // cyan.500 #5ec2c2 -> cyan.100 #f4fbfb (9.30 vs #0b0c0c, sep 2.01)
+    magenta: [
+      [231, 151, 231],
+      [253, 248, 253],
+    ], // magenta.500 #e797e7 -> magenta.100 #fdf8fd (9.31, sep 2.01)
+    yellow: [
+      [183, 183, 84],
+      [250, 250, 244],
+    ], // yellow.500 #b7b754 -> yellow.100 #fafaf4 (9.25, sep 2.02)
+    neutral: [
+      [165, 168, 167],
+      [248, 251, 251],
+    ], // neutral.500 #a5a8a7 -> neutral.100 #f8fbfb (8.17, sep 2.30)
+  };
+  // Mid variant: the ramp segment between the dark and light ranges (inks:
+  // dark takes 1200-1000 and light 500-100, so mid is 900-600) — for imagery
+  // with no text over it, sitting acceptably on both light and dark
+  // surroundings. No WCAG foreground guarantee. PNG export only (the
+  // adaptive SVG embeds dark + light). The neutral ramp is spread too evenly
+  // for its strict between-segment (700-600, 1.66) to match the ink
+  // separations (~2.56), so neutral mid shares its highlight step with the
+  // light shadow: 700-500 at 2.38.
+  var AXES_MID = {
+    cyan: [
+      [0, 97, 97],
+      [59, 169, 169],
+    ], // cyan.900 #006161 -> cyan.600 #3ba9a9 (sep 2.58)
+    magenta: [
+      [145, 38, 145],
+      [212, 120, 212],
+    ], // magenta.900 #912691 -> magenta.600 #d478d4 (sep 2.57)
+    yellow: [
+      [90, 90, 1],
+      [158, 158, 55],
+    ], // yellow.900 #5a5a01 -> yellow.600 #9e9e37 (sep 2.55)
+    neutral: [
+      [100, 103, 102],
+      [165, 168, 167],
+    ], // neutral.700 #646766 -> neutral.500 #a5a8a7 (sep 2.38)
+  };
+  var PAIRS = { dark: AXES, mid: AXES_MID, light: AXES_LIGHT };
   var GAMMA = 0.7,
     BLACK_PCT = 0.02,
     WHITE_PCT = 0.98;
@@ -66,9 +120,12 @@
       : sorted[lo];
   }
 
-  function screenCore(rgb, W, H, axis) {
-    var pair = AXES[axis];
-    if (!pair) throw new Error("axis must be 'cyan' or 'neutral'");
+  function screenCore(rgb, W, H, axis, tone) {
+    var axes = PAIRS[tone || "dark"];
+    if (!axes) throw new Error("tone must be 'dark', 'mid' or 'light'");
+    var pair = axes[axis];
+    if (!pair)
+      throw new Error("axis must be 'cyan', 'magenta', 'yellow' or 'neutral'");
     var shadow = pair[0],
       high = pair[1],
       N = W * H;
@@ -104,6 +161,11 @@
 
   global.screenCore = screenCore;
   global.SCREEN_AXES = AXES;
+  global.SCREEN_PAIRS = PAIRS;
   if (typeof module !== "undefined" && module.exports)
-    module.exports = { screenCore: screenCore, AXES: AXES };
+    module.exports = {
+      screenCore: screenCore,
+      AXES: AXES,
+      PAIRS: PAIRS,
+    };
 })(typeof globalThis !== "undefined" ? globalThis : this);
