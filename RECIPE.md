@@ -45,7 +45,7 @@ light and dark surroundings).
 | Axis    | Shadow (0)               | Highlight (1)            |
 | ------- | ------------------------ | ------------------------ |
 | Cyan    | `cyan.1200` `#001919`    | `cyan.1000` `#004848`    |
-| Magenta | `magenta.1200` `#2e002e` | `magenta.1000` `#770077` |
+| Magenta | `magenta.1200` `#230d23` | `magenta.1000` `#5f2e5f` |
 | Yellow  | `yellow.1200` `#171700`  | `yellow.1000` `#424202`  |
 | Neutral | `neutral.1200` `#0b0c0c` | `neutral.800` `#424444`  |
 
@@ -54,7 +54,7 @@ light and dark surroundings).
 | Axis    | Shadow (0)              | Highlight (1)           |
 | ------- | ----------------------- | ----------------------- |
 | Cyan    | `cyan.900` `#006464`    | `cyan.600` `#3ba9a9`    |
-| Magenta | `magenta.900` `#952795` | `magenta.600` `#d478d4` |
+| Magenta | `magenta.900` `#814181` | `magenta.600` `#d27ad2` |
 | Yellow  | `yellow.900` `#5c5d01`  | `yellow.600` `#9e9e37`  |
 | Neutral | `neutral.700` `#646766` | `neutral.500` `#a5a8a7` |
 
