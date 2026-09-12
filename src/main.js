@@ -52,7 +52,7 @@ let scanOn = false, // ambient scan sweep loop
 const stage = document.getElementById("stage");
 // Current export blobs, keyed by menu item id; null until the first
 // treatment exists.
-const downloads = { png: null, svg: null, apng: null };
+const downloads = { png: null, svg: null };
 
 document
   .getElementById("download")
@@ -742,33 +742,29 @@ async function updateDownload() {
   const token = ++dlToken;
   const suffix = ratio === "default" ? "" : `--${ratio}`;
   const motion = scanOn || dissolveOn;
-  // PNG and adaptive SVG are always the static treatment. When motion is on,
-  // the APNG carries the animation (current tone only).
-  const [png, svg, apng] = await Promise.all([
-    variantPNG(tone),
+  // The PNG carries the animation (APNG, current tone) when a motion is on,
+  // otherwise the static treatment — both are valid PNGs. The SVG is always
+  // the static adaptive dark/light pair.
+  const [png, svg] = await Promise.all([
+    motion ? motionAPNG() : variantPNG(tone),
     adaptiveSvg(),
-    motion ? motionAPNG() : Promise.resolve(null),
   ]);
   if (token !== dlToken) return;
   const toneSuffix = tone === "dark" ? "" : `--${tone}`;
+  const animSuffix = motion ? "--anim" : "";
   for (const [id, blob, name] of [
     [
       "png",
       new Blob([png], { type: "image/png" }),
-      `${baseName}--${axis}${toneSuffix}${suffix}.png`,
+      `${baseName}--${axis}${toneSuffix}${animSuffix}${suffix}.png`,
     ],
     [
       "svg",
       new Blob([svg], { type: "image/svg+xml" }),
       `${baseName}--${axis}--adaptive${suffix}.svg`,
     ],
-    [
-      "apng",
-      apng ? new Blob([apng], { type: "image/apng" }) : null,
-      `${baseName}--${axis}${toneSuffix}--anim${suffix}.png`,
-    ],
   ]) {
     if (downloads[id]) URL.revokeObjectURL(downloads[id].url);
-    downloads[id] = blob ? { url: URL.createObjectURL(blob), name } : null;
+    downloads[id] = { url: URL.createObjectURL(blob), name };
   }
 }
