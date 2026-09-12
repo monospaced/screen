@@ -16,6 +16,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@jsquash/webp": "^1.5.0",
     "@monospaced/set-assets": "^0.12.0",
     "@monospaced/set-core": "^0.12.0"
   },

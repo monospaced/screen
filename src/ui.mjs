@@ -131,7 +131,7 @@ function toolbar() {
     triggerLabel: "Download",
     triggerLabelVisibility: "hiddenBelowTablet",
     items: [
-      { id: "png", label: "PNG" },
+      { id: "png", label: "PNG / WebP" },
       { id: "svg", label: "SVG" },
     ],
   });

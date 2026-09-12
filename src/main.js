@@ -6,6 +6,9 @@ import "./style.css";
 // globalThis.screenCore (see screen-core.js), which the Node CLI consumes too.
 import "../shared/screen-core.js";
 
+// Lossless WebP frame encoder (small WASM). We do our own animation muxing
+// (see encodeScreenWebP) so we only need the single-frame encoder.
+import { encode as encodeWebpFrame } from "@jsquash/webp";
 import {
   defineSetLightswitch,
   defineSetMenu,
@@ -54,16 +57,23 @@ const stage = document.getElementById("stage");
 // treatment exists.
 const downloads = { png: null, svg: null };
 
-document
-  .getElementById("download")
-  .addEventListener(SET_MENU_EVENT_CHOOSE, (e) => {
-    const file = downloads[e.detail.id];
-    if (!file) return;
-    const a = document.createElement("a");
-    a.href = file.url;
-    a.download = file.name;
-    a.click();
-  });
+const downloadMenu = document.getElementById("download");
+// Opening the menu is the intent-to-download signal: start the (possibly slow)
+// build now so it overlaps with the user reading the two items. The menu marks
+// itself open via data-open; a fresh, unchanged reopen reuses the cached build.
+new MutationObserver(() => {
+  if (downloadMenu.hasAttribute("data-open")) flushDownload();
+}).observe(downloadMenu, { attributes: true, attributeFilter: ["data-open"] });
+downloadMenu.addEventListener(SET_MENU_EVENT_CHOOSE, async (e) => {
+  const { id } = e.detail;
+  await flushDownload(); // guarantee the export reflects the current settings
+  const file = downloads[id];
+  if (!file) return;
+  const a = document.createElement("a");
+  a.href = file.url;
+  a.download = file.name;
+  a.click();
+});
 
 document.getElementById("axis").addEventListener("change", (e) => {
   axis = e.target.value;
@@ -85,14 +95,14 @@ document.getElementById("scan").addEventListener("change", (e) => {
     stopMotion();
     render(false); // repaint the settled base frame
   }
-  updateDownload(); // motion state changed → rebuild the export
+  markDownloadStale(); // motion state changed → export needs a rebuild
 });
 document.getElementById("dissolve").addEventListener("change", (e) => {
   dissolveOn = e.target.checked;
   if (!img) return;
   if (dissolveOn) startDissolve(); // toggling on previews the entrance
   else render(false); // abandon any running dissolve, settle to base
-  updateDownload(); // motion state changed → rebuild the export
+  markDownloadStale(); // motion state changed → export needs a rebuild
 });
 
 document.getElementById("choose").onclick = () =>
@@ -190,7 +200,7 @@ function endDrag() {
   if (!dragging) return;
   dragging = false;
   outCanvas.classList.remove("dragging");
-  updateDownload();
+  markDownloadStale();
 }
 stage.addEventListener("pointerup", endDrag);
 stage.addEventListener("pointercancel", endDrag);
@@ -301,7 +311,7 @@ function render(updateDl = true) {
   if (entrance) startDissolve();
   else if (scanOn) startMotion();
   else stopMotion();
-  if (updateDl) updateDownload();
+  if (updateDl) markDownloadStale();
 }
 
 // ---- Motion ----
@@ -592,75 +602,157 @@ function concatChunks(parts) {
   return bytes;
 }
 
-// A frame as 2-bit indexed filter-0 scanlines, nearest-neighbour x`up`. Pixel
-// index: 0 shadow, 1 highlight, 2 transparent. When `litPrev` is given, cells
-// unchanged from it are written as index 2 (transparent) so the frame is a
-// sparse delta that blends OVER the accumulated canvas — most of it collapses
-// to a run of 2s that deflate crushes. litPrev null = a full opaque frame.
-function overlayRaw(lit, litPrev, Wc, Hc, up) {
-  const W = Wc * up,
-    H = Hc * up;
-  const rowBytes = Math.ceil(W / 4); // 2 bits/pixel -> 4 pixels/byte
-  const raw = new Uint8Array(H * (1 + rowBytes));
-  for (let y = 0; y < H; y++) {
-    const sy = (y / up) | 0,
-      o = y * (1 + rowBytes) + 1;
-    for (let x = 0; x < W; x++) {
-      const i = sy * Wc + ((x / up) | 0);
-      const idx = litPrev && lit[i] === litPrev[i] ? 2 : lit[i] ? 1 : 0;
-      if (idx) raw[o + (x >> 2)] |= idx << (6 - 2 * (x & 3));
-    }
-  }
-  return raw;
+// ---- animated lossless WebP encoder ----
+// Same transparency-delta idea as the old APNG path, but each frame is a
+// lossless WebP (VP8L, via jSquash) and we hand-mux the RIFF animation
+// container ourselves. Frame 0 is the full image; each later frame is the
+// bounding box of the cells that changed, with unchanged pixels transparent
+// so it blends OVER the accumulated canvas. ~2.8x smaller than the APNG for
+// the same pixels (verified pixel-exact), and no more portable-format concern
+// than APNG for the animated case.
+
+const u24 = (n) => [n & 255, (n >> 8) & 255, (n >> 16) & 255];
+
+// A RIFF chunk: FourCC + uint32-LE size + payload + pad byte if size is odd.
+function webpChunk(fourcc, payload) {
+  const size = payload.length;
+  const out = new Uint8Array(8 + size + (size & 1));
+  const view = new DataView(out.buffer);
+  for (let i = 0; i < 4; i++) out[i] = fourcc.charCodeAt(i);
+  view.setUint32(4, size, true);
+  out.set(payload, 8);
+  return out;
 }
 
-// APNG: the treatment animated, as a transparency-delta stream. `lits` is an
-// array of grid-resolution 0/1 bitmaps (one per step). Frame 0 is the full
-// image; each later frame overlays only the cells that changed. Indexed 2-bit
-// (shadow / highlight / transparent via tRNS), dispose none, blend over.
-// numPlays 0 loops forever.
-async function encodeScreenAPNG(lits, Wc, Hc, up, pair, numPlays, frameMs) {
+// Pull the VP8L (lossless image) sub-chunk out of a single-frame WebP so it can
+// be embedded as an animation frame's image data.
+function extractVP8L(webp) {
+  const view = new DataView(webp.buffer, webp.byteOffset, webp.byteLength);
+  let o = 12; // skip "RIFF" + size + "WEBP"
+  while (o + 8 <= webp.length) {
+    const id = String.fromCharCode(webp[o], webp[o + 1], webp[o + 2], webp[o + 3]);
+    const size = view.getUint32(o + 4, true);
+    const advance = 8 + size + (size & 1);
+    if (id === "VP8L") return webp.subarray(o, o + advance);
+    o += advance;
+  }
+  throw new Error("no VP8L chunk (encoder was not lossless?)");
+}
+
+// One animation frame chunk. x/y are stored halved (ANMF offsets must be even —
+// `up` is 2 so grid-aligned boxes always are). noBlend true = overwrite the
+// canvas (frame 0, for a clean loop reset); false = alpha-blend OVER it.
+function anmf(x, y, w, h, ms, noBlend, vp8l) {
+  const hdr = new Uint8Array([
+    ...u24(x >> 1),
+    ...u24(y >> 1),
+    ...u24(w - 1),
+    ...u24(h - 1),
+    ...u24(ms),
+    noBlend ? 0x02 : 0x00, // bit1: blending (1=no-blend); bit0: disposal (0=none)
+  ]);
+  return webpChunk("ANMF", concatChunks([hdr, vp8l]));
+}
+
+// The RGBA sub-image for one frame. litPrev null = the full opaque image;
+// otherwise the bounding box of changed cells, with unchanged pixels left
+// transparent (alpha 0) so the frame is a sparse delta. Returns null for an
+// identical frame. Nearest-neighbour x`up`, grid-cell colours from `pair`.
+function webpFrame(lit, litPrev, Wc, Hc, up, pair) {
+  const [shadow, high] = pair;
   const W = Wc * up,
     H = Hc * up;
-  const [shadow, high] = pair;
-  const acTL = new Uint8Array(8);
-  const av = new DataView(acTL.buffer);
-  av.setUint32(0, lits.length);
-  av.setUint32(4, numPlays);
-  const parts = [
-    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-    pngChunk("IHDR", ihdrIndexed(W, H, 2)),
-    pngChunk("PLTE", new Uint8Array([...shadow, ...high, 0, 0, 0])),
-    pngChunk("tRNS", new Uint8Array([255, 255, 0])), // index 2 transparent
-    pngChunk("acTL", acTL),
-  ];
-  let seq = 0;
-  for (let k = 0; k < lits.length; k++) {
-    const raw = overlayRaw(lits[k], k > 0 ? lits[k - 1] : null, Wc, Hc, up);
-    const comp = await deflate(raw);
-    const fcTL = new Uint8Array(26);
-    const fv = new DataView(fcTL.buffer);
-    fv.setUint32(0, seq++); // sequence_number
-    fv.setUint32(4, W); // width
-    fv.setUint32(8, H); // height
-    fv.setUint32(12, 0); // x_offset
-    fv.setUint32(16, 0); // y_offset
-    fv.setUint16(20, frameMs); // delay_num
-    fv.setUint16(22, 1000); // delay_den (ms)
-    fcTL[24] = 0; // dispose_op: none — keep canvas for the next delta
-    fcTL[25] = k === 0 ? 0 : 1; // blend_op: frame 0 source, deltas over
-    parts.push(pngChunk("fcTL", fcTL));
-    if (k === 0) {
-      parts.push(pngChunk("IDAT", comp)); // frame 0 is also the default image
-    } else {
-      const fdAT = new Uint8Array(4 + comp.length);
-      new DataView(fdAT.buffer).setUint32(0, seq++);
-      fdAT.set(comp, 4);
-      parts.push(pngChunk("fdAT", fdAT));
+  if (!litPrev) {
+    const data = new Uint8ClampedArray(W * H * 4);
+    for (let y = 0; y < H; y++) {
+      const gy = (y / up) | 0;
+      for (let x = 0; x < W; x++) {
+        const c = lit[gy * Wc + ((x / up) | 0)] ? high : shadow;
+        const o = (y * W + x) * 4;
+        data[o] = c[0];
+        data[o + 1] = c[1];
+        data[o + 2] = c[2];
+        data[o + 3] = 255;
+      }
+    }
+    return { x: 0, y: 0, w: W, h: H, data, full: true };
+  }
+  let minC = Wc,
+    minR = Hc,
+    maxC = -1,
+    maxR = -1;
+  for (let r = 0; r < Hc; r++)
+    for (let c = 0; c < Wc; c++) {
+      const i = r * Wc + c;
+      if (lit[i] !== litPrev[i]) {
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+      }
+    }
+  if (maxC < 0) return null; // identical frame
+  const x = minC * up,
+    y = minR * up,
+    w = (maxC - minC + 1) * up,
+    h = (maxR - minR + 1) * up;
+  const data = new Uint8ClampedArray(w * h * 4); // zero => transparent
+  for (let py = 0; py < h; py++) {
+    const gr = ((y + py) / up) | 0;
+    for (let px = 0; px < w; px++) {
+      const gc = ((x + px) / up) | 0;
+      const i = gr * Wc + gc;
+      if (lit[i] !== litPrev[i]) {
+        const c = lit[i] ? high : shadow;
+        const o = (py * w + px) * 4;
+        data[o] = c[0];
+        data[o + 1] = c[1];
+        data[o + 2] = c[2];
+        data[o + 3] = 255;
+      }
     }
   }
-  parts.push(pngChunk("IEND", new Uint8Array(0)));
-  return concatChunks(parts);
+  return { x, y, w, h, data, full: false };
+}
+
+// `lits` is an array of grid-resolution 0/1 bitmaps (one per step). loop 0
+// loops forever; frameMs is each frame's duration. `isStale` (optional) lets a
+// newer rebuild abort this one mid-encode. Yields to the event loop between
+// batches so the main-thread encode never blocks input or the live animation.
+async function encodeScreenWebP(lits, Wc, Hc, up, pair, loop, frameMs, isStale) {
+  const W = Wc * up,
+    H = Hc * up;
+  const enc = async (data, w, h) =>
+    extractVP8L(new Uint8Array(await encodeWebpFrame({ data, width: w, height: h }, { lossless: 1 })));
+  const parts = [];
+  for (let k = 0; k < lits.length; k++) {
+    if (isStale?.()) return null; // superseded — stop wasting main-thread time
+    const f = webpFrame(lits[k], k > 0 ? lits[k - 1] : null, Wc, Hc, up, pair);
+    if (!f) {
+      // Identical frame: a 2x2 fully-transparent blend frame carries duration.
+      const vp8l = await enc(new Uint8ClampedArray(2 * 2 * 4), 2, 2);
+      parts.push(anmf(0, 0, 2, 2, frameMs, false, vp8l));
+    } else {
+      const vp8l = await enc(f.data, f.w, f.h);
+      parts.push(anmf(f.x, f.y, f.w, f.h, frameMs, f.full, vp8l));
+    }
+    // Every 8th frame, hand the main thread back so queued input and rAF paints
+    // run between batches (setTimeout, not rAF — rAF is throttled under load).
+    if ((k & 7) === 7) await new Promise((r) => setTimeout(r));
+  }
+  const vp8x = webpChunk(
+    "VP8X",
+    new Uint8Array([0x12, 0, 0, 0, ...u24(W - 1), ...u24(H - 1)]), // flags: animation + alpha
+  );
+  const anim = webpChunk("ANIM", new Uint8Array([0, 0, 0, 0, loop & 255, (loop >> 8) & 255]));
+  const body = concatChunks([vp8x, anim, ...parts]);
+  const riff = new Uint8Array(12 + body.length);
+  const view = new DataView(riff.buffer);
+  riff.set([82, 73, 70, 70], 0); // "RIFF"
+  view.setUint32(4, 4 + body.length, true);
+  riff.set([87, 69, 66, 80], 8); // "WEBP"
+  riff.set(body, 12);
+  return riff;
 }
 
 function blobToDataURL(blob) {
@@ -711,19 +803,19 @@ async function adaptiveSvg() {
   );
 }
 
-// APNG of the current tone's treatment with the active motion. Single tone
-// (adaptive theming is composed outside Screen from separate exports), so no
-// filter/scheme juggling — just faithful canvas frames. Scan → seamless loop;
-// Load → dissolve entrance, played once, freezing on the full image; both →
-// the concurrent entrance once. Frame count is per-mode: the perpetual Scan
-// loop gets 96 (~20fps) since it's on screen forever and smoother motion is
-// worth it, while anything with the Load dissolve stays at 64 — that matches
+// Animated WebP of the current tone's treatment with the active motion. Single
+// tone (adaptive theming is composed outside Screen from separate exports), so
+// no filter/scheme juggling — just faithful canvas frames. Scan → seamless
+// loop; Load → dissolve entrance, played once, freezing on the full image;
+// both → the concurrent entrance once. Frame count is per-mode: the perpetual
+// Scan loop gets 96 (~20fps) since it's on screen forever and smoother motion
+// is worth it, while anything with the Load dissolve stays at 64 — that matches
 // the dissolve's 64 Bayer reveal steps exactly, and the entrance is a one-time
 // transient where extra frames would only add bytes.
 const SCAN_FRAMES = 96,
   DISSOLVE_FRAMES = 64;
 
-async function motionAPNG() {
+async function motionWebP(isStale) {
   const { rgb, Wc, Hc, up } = lastRender;
   const pair = SCREEN_PAIRS[tone][axis];
   const t = screenToneField(rgb, Wc, Hc);
@@ -757,34 +849,63 @@ async function motionAPNG() {
     const reveal = dissolveOn ? (k + 1) / N : 1;
     lits.push(frameLit(yc, reveal));
   }
-  const numPlays = dissolveOn ? 1 : 0; // Load plays once; Scan loops
+  const loop = dissolveOn ? 1 : 0; // Load plays once; Scan loops forever
   const frameMs = Math.round(SCAN_SWEEP_MS / N);
-  return encodeScreenAPNG(lits, Wc, Hc, up, pair, numPlays, frameMs);
+  return encodeScreenWebP(lits, Wc, Hc, up, pair, loop, frameMs, isStale);
 }
 
 // Successive calls can interleave (crop drag end vs radio change); the token
 // makes stale results drop out instead of clobbering newer ones.
 let dlToken = 0;
 
+// Rebuilding the export is expensive (the animated WebP is ~96 lossless frame
+// encodes) and most interactions never end in a download, so we never build on
+// control changes — a change just marks the current export stale. The build
+// runs lazily when the download menu is engaged: on open (see the observer by
+// the choose handler) so the encode overlaps with the user picking an item,
+// and awaited on choose as a guarantee a click can't hand back output that
+// lags the current settings. `dlPromise` caches the latest build, so reopening
+// the menu unchanged reuses it instantly.
+let dlDirty = true;
+let dlPromise = Promise.resolve();
+
+function markDownloadStale() {
+  dlDirty = true;
+}
+
+function flushDownload() {
+  if (dlDirty) {
+    dlDirty = false;
+    dlPromise = updateDownload();
+  }
+  return dlPromise;
+}
+
 async function updateDownload() {
   const token = ++dlToken;
   const suffix = ratio === "default" ? "" : `--${ratio}`;
   const motion = scanOn || dissolveOn;
-  // The PNG carries the animation (APNG, current tone) when a motion is on,
-  // otherwise the static treatment — both are valid PNGs. The SVG is always
-  // the static adaptive dark/light pair.
-  const [png, svg] = await Promise.all([
-    motion ? motionAPNG() : variantPNG(tone),
+  // The raster slot is an animated lossless WebP (current tone) when a motion
+  // is on, otherwise the static 1-bit PNG — WebP for the animated case, but PNG
+  // kept for static so the still stays maximally portable (OG images etc.).
+  // The SVG is always the static adaptive dark/light pair. motionWebP yields
+  // between frame batches and bails if a newer rebuild supersedes this one
+  // (isStale), so a long encode never freezes the UI or clobbers fresh output.
+  const isStale = () => token !== dlToken;
+  const [image, svg] = await Promise.all([
+    motion ? motionWebP(isStale) : variantPNG(tone),
     adaptiveSvg(),
   ]);
-  if (token !== dlToken) return;
+  if (token !== dlToken || image == null) return;
   const toneSuffix = tone === "dark" ? "" : `--${tone}`;
   const animSuffix = motion ? "--anim" : "";
+  const imageExt = motion ? "webp" : "png";
+  const imageType = motion ? "image/webp" : "image/png";
   for (const [id, blob, name] of [
     [
       "png",
-      new Blob([png], { type: "image/png" }),
-      `${baseName}--${axis}${toneSuffix}${animSuffix}${suffix}.png`,
+      new Blob([image], { type: imageType }),
+      `${baseName}--${axis}${toneSuffix}${animSuffix}${suffix}.${imageExt}`,
     ],
     [
       "svg",
