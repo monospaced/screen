@@ -133,6 +133,7 @@ function toolbar() {
     items: [
       { id: "png", label: "PNG" },
       { id: "svg", label: "SVG" },
+      { id: "apng", label: "Animated PNG" },
     ],
   });
   const right = renderSetInline({

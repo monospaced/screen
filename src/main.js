@@ -52,7 +52,7 @@ let scanOn = false, // ambient scan sweep loop
 const stage = document.getElementById("stage");
 // Current export blobs, keyed by menu item id; null until the first
 // treatment exists.
-const downloads = { png: null, svg: null };
+const downloads = { png: null, svg: null, apng: null };
 
 document
   .getElementById("download")
@@ -85,12 +85,14 @@ document.getElementById("scan").addEventListener("change", (e) => {
     stopMotion();
     render(false); // repaint the settled base frame
   }
+  updateDownload(); // motion state changed → rebuild the export
 });
 document.getElementById("dissolve").addEventListener("change", (e) => {
   dissolveOn = e.target.checked;
   if (!img) return;
   if (dissolveOn) startDissolve(); // toggling on previews the entrance
   else render(false); // abandon any running dissolve, settle to base
+  updateDownload(); // motion state changed → rebuild the export
 });
 
 document.getElementById("choose").onclick = () =>
@@ -522,14 +524,13 @@ async function deflate(bytes) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-// out: screenCore RGB buffer at grid size; encodes the nearest-neighbour
-// x`up` upscale as a 1-bit indexed PNG. Any pixel that isn't the shadow
-// colour is the highlight (2-level guarantee).
-async function encodeScreenPNG(out, Wc, Hc, up, pair) {
+// out: screenCore RGB buffer at grid size; the nearest-neighbour x`up`
+// upscale as 1-bit filter-0 scanlines. Any pixel that isn't the shadow colour
+// is the highlight (2-level guarantee). Shared by the PNG and APNG encoders.
+function screenRaw(out, Wc, Hc, up, pair) {
   const W = Wc * up,
     H = Hc * up;
-  const shadow = pair[0],
-    high = pair[1];
+  const shadow = pair[0];
   const rowBytes = Math.ceil(W / 8);
   const raw = new Uint8Array(H * (1 + rowBytes));
   for (let y = 0; y < H; y++) {
@@ -545,15 +546,29 @@ async function encodeScreenPNG(out, Wc, Hc, up, pair) {
         raw[o + (x >> 3)] |= 0x80 >> (x & 7);
     }
   }
+  return raw;
+}
+
+function ihdrIndexed(W, H) {
   const ihdr = new Uint8Array(13);
   const view = new DataView(ihdr.buffer);
   view.setUint32(0, W);
   view.setUint32(4, H);
   ihdr[8] = 1; // bit depth
   ihdr[9] = 3; // colour type: indexed
+  return ihdr;
+}
+
+// Encodes the treatment as a 1-bit indexed PNG.
+async function encodeScreenPNG(out, Wc, Hc, up, pair) {
+  const W = Wc * up,
+    H = Hc * up;
+  const shadow = pair[0],
+    high = pair[1];
+  const raw = screenRaw(out, Wc, Hc, up, pair);
   const parts = [
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-    pngChunk("IHDR", ihdr),
+    pngChunk("IHDR", ihdrIndexed(W, H)),
     pngChunk("PLTE", new Uint8Array([...shadow, ...high])),
     pngChunk("IDAT", await deflate(raw)),
     pngChunk("IEND", new Uint8Array(0)),
@@ -565,6 +580,61 @@ async function encodeScreenPNG(out, Wc, Hc, up, pair) {
     offset += p.length;
   }
   return bytes;
+}
+
+function concatChunks(parts) {
+  const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let offset = 0;
+  for (const p of parts) {
+    bytes.set(p, offset);
+    offset += p.length;
+  }
+  return bytes;
+}
+
+// APNG: the treatment animated. frames is an array of screenCore RGB buffers
+// (one per animation step). Full-frame encoding — each frame is a complete
+// 1-bit indexed image (dispose none / blend source). numPlays 0 loops forever.
+async function encodeScreenAPNG(frames, Wc, Hc, up, pair, numPlays, frameMs) {
+  const W = Wc * up,
+    H = Hc * up;
+  const [shadow, high] = pair;
+  const acTL = new Uint8Array(8);
+  const av = new DataView(acTL.buffer);
+  av.setUint32(0, frames.length);
+  av.setUint32(4, numPlays);
+  const parts = [
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk("IHDR", ihdrIndexed(W, H)),
+    pngChunk("PLTE", new Uint8Array([...shadow, ...high])),
+    pngChunk("acTL", acTL),
+  ];
+  let seq = 0;
+  for (let k = 0; k < frames.length; k++) {
+    const comp = await deflate(screenRaw(frames[k], Wc, Hc, up, pair));
+    const fcTL = new Uint8Array(26);
+    const fv = new DataView(fcTL.buffer);
+    fv.setUint32(0, seq++); // sequence_number
+    fv.setUint32(4, W); // width
+    fv.setUint32(8, H); // height
+    fv.setUint32(12, 0); // x_offset
+    fv.setUint32(16, 0); // y_offset
+    fv.setUint16(20, frameMs); // delay_num
+    fv.setUint16(22, 1000); // delay_den (ms)
+    fcTL[24] = 0; // dispose_op: none
+    fcTL[25] = 0; // blend_op: source
+    parts.push(pngChunk("fcTL", fcTL));
+    if (k === 0) {
+      parts.push(pngChunk("IDAT", comp)); // frame 0 is also the default image
+    } else {
+      const fdAT = new Uint8Array(4 + comp.length);
+      new DataView(fdAT.buffer).setUint32(0, seq++);
+      fdAT.set(comp, 4);
+      parts.push(pngChunk("fdAT", fdAT));
+    }
+  }
+  parts.push(pngChunk("IEND", new Uint8Array(0)));
+  return concatChunks(parts);
 }
 
 function blobToDataURL(blob) {
@@ -615,6 +685,55 @@ async function adaptiveSvg() {
   );
 }
 
+// APNG of the current tone's treatment with the active motion. Single tone
+// (adaptive theming is composed outside Screen from separate exports), so no
+// filter/scheme juggling — just faithful canvas frames. Scan → seamless loop;
+// Load → dissolve entrance, played once, freezing on the full image; both →
+// the concurrent entrance once.
+const APNG_FRAMES = 30;
+
+async function motionAPNG() {
+  const { rgb, Wc, Hc, up } = lastRender;
+  const pair = SCREEN_PAIRS[tone][axis];
+  const t = screenToneField(rgb, Wc, Hc);
+  const sigma = SCAN_WIDTH * Hc;
+  // One frame: scan band centred at row yc (or none), gated by dissolve
+  // progress reveal (1 = fully revealed).
+  const frameOut = (yc, reveal) => {
+    const [shadow, high] = pair;
+    const out = new Uint8ClampedArray(Wc * Hc * 3);
+    for (let y = 0; y < Hc; y++) {
+      let boost = 0;
+      if (yc !== null) {
+        let dy = Math.abs(y - yc);
+        if (dy > Hc - dy) dy = Hc - dy;
+        boost = SCAN_AMP * Math.exp(-(dy * dy) / (2 * sigma * sigma));
+      }
+      for (let x = 0; x < Wc; x++) {
+        const i = y * Wc + x;
+        const b = B8[(y & 7) * 8 + (x & 7)];
+        const lit = b < reveal && t[i] > b - boost;
+        const c = lit ? high : shadow;
+        out[i * 3] = c[0];
+        out[i * 3 + 1] = c[1];
+        out[i * 3 + 2] = c[2];
+      }
+    }
+    return out;
+  };
+  const N = APNG_FRAMES;
+  const frames = [];
+  for (let k = 0; k < N; k++) {
+    const yc = scanOn ? (k / N) * Hc : null;
+    // Dissolve ramps 0→1 across the frames; when Load is off, fully revealed.
+    const reveal = dissolveOn ? (k + 1) / N : 1;
+    frames.push(frameOut(yc, reveal));
+  }
+  const numPlays = dissolveOn ? 1 : 0; // Load plays once; Scan loops
+  const frameMs = Math.round(SCAN_SWEEP_MS / N);
+  return encodeScreenAPNG(frames, Wc, Hc, up, pair, numPlays, frameMs);
+}
+
 // Successive calls can interleave (crop drag end vs radio change); the token
 // makes stale results drop out instead of clobbering newer ones.
 let dlToken = 0;
@@ -622,21 +741,34 @@ let dlToken = 0;
 async function updateDownload() {
   const token = ++dlToken;
   const suffix = ratio === "default" ? "" : `--${ratio}`;
-  const [png, svg] = await Promise.all([variantPNG(tone), adaptiveSvg()]);
+  const motion = scanOn || dissolveOn;
+  // PNG and adaptive SVG are always the static treatment. When motion is on,
+  // the APNG carries the animation (current tone only).
+  const [png, svg, apng] = await Promise.all([
+    variantPNG(tone),
+    adaptiveSvg(),
+    motion ? motionAPNG() : Promise.resolve(null),
+  ]);
   if (token !== dlToken) return;
+  const toneSuffix = tone === "dark" ? "" : `--${tone}`;
   for (const [id, blob, name] of [
     [
       "png",
       new Blob([png], { type: "image/png" }),
-      `${baseName}--${axis}${tone === "dark" ? "" : `--${tone}`}${suffix}.png`,
+      `${baseName}--${axis}${toneSuffix}${suffix}.png`,
     ],
     [
       "svg",
       new Blob([svg], { type: "image/svg+xml" }),
       `${baseName}--${axis}--adaptive${suffix}.svg`,
     ],
+    [
+      "apng",
+      apng ? new Blob([apng], { type: "image/apng" }) : null,
+      `${baseName}--${axis}${toneSuffix}--anim${suffix}.png`,
+    ],
   ]) {
     if (downloads[id]) URL.revokeObjectURL(downloads[id].url);
-    downloads[id] = { url: URL.createObjectURL(blob), name };
+    downloads[id] = blob ? { url: URL.createObjectURL(blob), name } : null;
   }
 }
