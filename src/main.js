@@ -549,12 +549,12 @@ function screenRaw(out, Wc, Hc, up, pair) {
   return raw;
 }
 
-function ihdrIndexed(W, H) {
+function ihdrIndexed(W, H, depth) {
   const ihdr = new Uint8Array(13);
   const view = new DataView(ihdr.buffer);
   view.setUint32(0, W);
   view.setUint32(4, H);
-  ihdr[8] = 1; // bit depth
+  ihdr[8] = depth; // bit depth
   ihdr[9] = 3; // colour type: indexed
   return ihdr;
 }
@@ -568,7 +568,7 @@ async function encodeScreenPNG(out, Wc, Hc, up, pair) {
   const raw = screenRaw(out, Wc, Hc, up, pair);
   const parts = [
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-    pngChunk("IHDR", ihdrIndexed(W, H)),
+    pngChunk("IHDR", ihdrIndexed(W, H, 1)),
     pngChunk("PLTE", new Uint8Array([...shadow, ...high])),
     pngChunk("IDAT", await deflate(raw)),
     pngChunk("IEND", new Uint8Array(0)),
@@ -592,26 +592,52 @@ function concatChunks(parts) {
   return bytes;
 }
 
-// APNG: the treatment animated. frames is an array of screenCore RGB buffers
-// (one per animation step). Full-frame encoding — each frame is a complete
-// 1-bit indexed image (dispose none / blend source). numPlays 0 loops forever.
-async function encodeScreenAPNG(frames, Wc, Hc, up, pair, numPlays, frameMs) {
+// A frame as 2-bit indexed filter-0 scanlines, nearest-neighbour x`up`. Pixel
+// index: 0 shadow, 1 highlight, 2 transparent. When `litPrev` is given, cells
+// unchanged from it are written as index 2 (transparent) so the frame is a
+// sparse delta that blends OVER the accumulated canvas — most of it collapses
+// to a run of 2s that deflate crushes. litPrev null = a full opaque frame.
+function overlayRaw(lit, litPrev, Wc, Hc, up) {
+  const W = Wc * up,
+    H = Hc * up;
+  const rowBytes = Math.ceil(W / 4); // 2 bits/pixel -> 4 pixels/byte
+  const raw = new Uint8Array(H * (1 + rowBytes));
+  for (let y = 0; y < H; y++) {
+    const sy = (y / up) | 0,
+      o = y * (1 + rowBytes) + 1;
+    for (let x = 0; x < W; x++) {
+      const i = sy * Wc + ((x / up) | 0);
+      const idx = litPrev && lit[i] === litPrev[i] ? 2 : lit[i] ? 1 : 0;
+      if (idx) raw[o + (x >> 2)] |= idx << (6 - 2 * (x & 3));
+    }
+  }
+  return raw;
+}
+
+// APNG: the treatment animated, as a transparency-delta stream. `lits` is an
+// array of grid-resolution 0/1 bitmaps (one per step). Frame 0 is the full
+// image; each later frame overlays only the cells that changed. Indexed 2-bit
+// (shadow / highlight / transparent via tRNS), dispose none, blend over.
+// numPlays 0 loops forever.
+async function encodeScreenAPNG(lits, Wc, Hc, up, pair, numPlays, frameMs) {
   const W = Wc * up,
     H = Hc * up;
   const [shadow, high] = pair;
   const acTL = new Uint8Array(8);
   const av = new DataView(acTL.buffer);
-  av.setUint32(0, frames.length);
+  av.setUint32(0, lits.length);
   av.setUint32(4, numPlays);
   const parts = [
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-    pngChunk("IHDR", ihdrIndexed(W, H)),
-    pngChunk("PLTE", new Uint8Array([...shadow, ...high])),
+    pngChunk("IHDR", ihdrIndexed(W, H, 2)),
+    pngChunk("PLTE", new Uint8Array([...shadow, ...high, 0, 0, 0])),
+    pngChunk("tRNS", new Uint8Array([255, 255, 0])), // index 2 transparent
     pngChunk("acTL", acTL),
   ];
   let seq = 0;
-  for (let k = 0; k < frames.length; k++) {
-    const comp = await deflate(screenRaw(frames[k], Wc, Hc, up, pair));
+  for (let k = 0; k < lits.length; k++) {
+    const raw = overlayRaw(lits[k], k > 0 ? lits[k - 1] : null, Wc, Hc, up);
+    const comp = await deflate(raw);
     const fcTL = new Uint8Array(26);
     const fv = new DataView(fcTL.buffer);
     fv.setUint32(0, seq++); // sequence_number
@@ -621,8 +647,8 @@ async function encodeScreenAPNG(frames, Wc, Hc, up, pair, numPlays, frameMs) {
     fv.setUint32(16, 0); // y_offset
     fv.setUint16(20, frameMs); // delay_num
     fv.setUint16(22, 1000); // delay_den (ms)
-    fcTL[24] = 0; // dispose_op: none
-    fcTL[25] = 0; // blend_op: source
+    fcTL[24] = 0; // dispose_op: none — keep canvas for the next delta
+    fcTL[25] = k === 0 ? 0 : 1; // blend_op: frame 0 source, deltas over
     parts.push(pngChunk("fcTL", fcTL));
     if (k === 0) {
       parts.push(pngChunk("IDAT", comp)); // frame 0 is also the default image
@@ -689,19 +715,23 @@ async function adaptiveSvg() {
 // (adaptive theming is composed outside Screen from separate exports), so no
 // filter/scheme juggling — just faithful canvas frames. Scan → seamless loop;
 // Load → dissolve entrance, played once, freezing on the full image; both →
-// the concurrent entrance once.
-const APNG_FRAMES = 30;
+// the concurrent entrance once. Frame count is per-mode: the perpetual Scan
+// loop gets 96 (~20fps) since it's on screen forever and smoother motion is
+// worth it, while anything with the Load dissolve stays at 64 — that matches
+// the dissolve's 64 Bayer reveal steps exactly, and the entrance is a one-time
+// transient where extra frames would only add bytes.
+const SCAN_FRAMES = 96,
+  DISSOLVE_FRAMES = 64;
 
 async function motionAPNG() {
   const { rgb, Wc, Hc, up } = lastRender;
   const pair = SCREEN_PAIRS[tone][axis];
   const t = screenToneField(rgb, Wc, Hc);
   const sigma = SCAN_WIDTH * Hc;
-  // One frame: scan band centred at row yc (or none), gated by dissolve
-  // progress reveal (1 = fully revealed).
-  const frameOut = (yc, reveal) => {
-    const [shadow, high] = pair;
-    const out = new Uint8ClampedArray(Wc * Hc * 3);
+  // One frame's grid-resolution 0/1 bitmap: scan band centred at row yc (or
+  // none), gated by dissolve progress reveal (1 = fully revealed).
+  const frameLit = (yc, reveal) => {
+    const lit = new Uint8Array(Wc * Hc);
     for (let y = 0; y < Hc; y++) {
       let boost = 0;
       if (yc !== null) {
@@ -712,26 +742,24 @@ async function motionAPNG() {
       for (let x = 0; x < Wc; x++) {
         const i = y * Wc + x;
         const b = B8[(y & 7) * 8 + (x & 7)];
-        const lit = b < reveal && t[i] > b - boost;
-        const c = lit ? high : shadow;
-        out[i * 3] = c[0];
-        out[i * 3 + 1] = c[1];
-        out[i * 3 + 2] = c[2];
+        lit[i] = b < reveal && t[i] > b - boost ? 1 : 0;
       }
     }
-    return out;
+    return lit;
   };
-  const N = APNG_FRAMES;
-  const frames = [];
+  // Load (or Load+Scan) uses the dissolve's frame count; a pure Scan loop
+  // uses the smoother scan count.
+  const N = dissolveOn ? DISSOLVE_FRAMES : SCAN_FRAMES;
+  const lits = [];
   for (let k = 0; k < N; k++) {
     const yc = scanOn ? (k / N) * Hc : null;
     // Dissolve ramps 0→1 across the frames; when Load is off, fully revealed.
     const reveal = dissolveOn ? (k + 1) / N : 1;
-    frames.push(frameOut(yc, reveal));
+    lits.push(frameLit(yc, reveal));
   }
   const numPlays = dissolveOn ? 1 : 0; // Load plays once; Scan loops
   const frameMs = Math.round(SCAN_SWEEP_MS / N);
-  return encodeScreenAPNG(frames, Wc, Hc, up, pair, numPlays, frameMs);
+  return encodeScreenAPNG(lits, Wc, Hc, up, pair, numPlays, frameMs);
 }
 
 // Successive calls can interleave (crop drag end vs radio change); the token
