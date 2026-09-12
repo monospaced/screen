@@ -122,16 +122,14 @@
       : sorted[lo];
   }
 
-  function screenCore(rgb, W, H, axis, tone) {
-    var axes = PAIRS[tone || "dark"];
-    if (!axes) throw new Error("tone must be 'dark', 'mid' or 'light'");
-    var pair = axes[axis];
-    if (!pair)
-      throw new Error("axis must be 'cyan', 'magenta', 'yellow' or 'neutral'");
-    var shadow = pair[0],
-      high = pair[1],
-      N = W * H;
+  var BAYER = bayer8();
 
+  // The pipeline up to (not including) the threshold: luminance -> 2/98
+  // auto-levels -> gamma, as a continuous per-cell tone field. Split out so
+  // consumers (e.g. animation experiments) can re-threshold per frame
+  // without re-running the histogram.
+  function toneField(rgb, W, H) {
+    var N = W * H;
     var lum = new Float32Array(N);
     for (var i = 0; i < N; i++) {
       lum[i] =
@@ -144,16 +142,31 @@
     var blk = pct(sorted, BLACK_PCT),
       wht = pct(sorted, WHITE_PCT);
     var denom = Math.max(wht - blk, 1e-6);
+    var t = new Float32Array(N);
+    for (i = 0; i < N; i++) {
+      var v = (lum[i] - blk) / denom;
+      v = v < 0 ? 0 : v > 1 ? 1 : v;
+      t[i] = Math.pow(v, GAMMA);
+    }
+    return t;
+  }
 
-    var B = bayer8(),
-      out = new Uint8ClampedArray(N * 3);
+  function screenCore(rgb, W, H, axis, tone) {
+    var axes = PAIRS[tone || "dark"];
+    if (!axes) throw new Error("tone must be 'dark', 'mid' or 'light'");
+    var pair = axes[axis];
+    if (!pair)
+      throw new Error("axis must be 'cyan', 'magenta', 'yellow' or 'neutral'");
+    var shadow = pair[0],
+      high = pair[1],
+      N = W * H;
+
+    var t = toneField(rgb, W, H);
+    var out = new Uint8ClampedArray(N * 3);
     for (var y = 0; y < H; y++)
       for (var x = 0; x < W; x++) {
-        i = y * W + x;
-        var t = (lum[i] - blk) / denom;
-        t = t < 0 ? 0 : t > 1 ? 1 : t;
-        t = Math.pow(t, GAMMA);
-        var c = t > B[(y % 8) * 8 + (x % 8)] ? high : shadow;
+        var i = y * W + x;
+        var c = t[i] > BAYER[(y % 8) * 8 + (x % 8)] ? high : shadow;
         out[i * 3] = c[0];
         out[i * 3 + 1] = c[1];
         out[i * 3 + 2] = c[2];
@@ -162,12 +175,16 @@
   }
 
   global.screenCore = screenCore;
+  global.screenToneField = toneField;
   global.SCREEN_AXES = AXES;
   global.SCREEN_PAIRS = PAIRS;
+  global.SCREEN_BAYER = BAYER;
   if (typeof module !== "undefined" && module.exports)
     module.exports = {
       screenCore: screenCore,
+      toneField: toneField,
       AXES: AXES,
       PAIRS: PAIRS,
+      BAYER: BAYER,
     };
 })(typeof globalThis !== "undefined" ? globalThis : this);

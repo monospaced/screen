@@ -26,7 +26,7 @@ defineSetSidebar();
 defineSetLightswitch();
 defineSetMenu();
 
-const { screenCore, SCREEN_PAIRS } = globalThis;
+const { screenCore, screenToneField, SCREEN_PAIRS, SCREEN_BAYER } = globalThis;
 const RES = 640,
   UPSCALE = 2,
   OG_W = 1200,
@@ -44,6 +44,11 @@ let cropX = 0.5,
   cropGeom = null, // {sw, sh, slackX, slackY} of the current crop, null when uncropped
   outCanvas = null,
   lastRender = null; // {rgb, Wc, Hc, up} of the current crop, for the SVG variants
+// Motion state — declared with the top-level state because loadImage (called
+// at module eval for the demo image) writes the pending-dissolve flag.
+let scanOn = false, // ambient scan sweep loop
+  dissolveOn = false, // dissolve-in entrance on image load
+  pendingDissolve = false; // set on image load, consumed by render()
 const stage = document.getElementById("stage");
 // Current export blobs, keyed by menu item id; null until the first
 // treatment exists.
@@ -72,6 +77,21 @@ document.getElementById("tone").addEventListener("change", (e) => {
   tone = e.target.value;
   if (img) render();
 });
+document.getElementById("scan").addEventListener("change", (e) => {
+  scanOn = e.target.checked;
+  if (!img) return;
+  if (scanOn) startMotion();
+  else {
+    stopMotion();
+    render(false); // repaint the settled base frame
+  }
+});
+document.getElementById("dissolve").addEventListener("change", (e) => {
+  dissolveOn = e.target.checked;
+  if (!img) return;
+  if (dissolveOn) startDissolve(); // toggling on previews the entrance
+  else render(false); // abandon any running dissolve, settle to base
+});
 
 document.getElementById("choose").onclick = () =>
   document.getElementById("file").click();
@@ -85,6 +105,7 @@ function loadImage(src, name) {
   baseName = name;
   cropX = 0.5;
   cropY = 0.5;
+  pendingDissolve = true; // entrance plays on the load's first render
   const im = new Image();
   im.onload = () => {
     img = im;
@@ -238,7 +259,9 @@ function render(updateDl = true) {
     rgb[i * 3 + 1] = src[i * 4 + 1];
     rgb[i * 3 + 2] = src[i * 4 + 2];
   }
-  lastRender = { rgb, Wc, Hc, up };
+  // pair rides along for Motion, which repaints frames on the displayed
+  // treatment's two endpoints.
+  lastRender = { rgb, Wc, Hc, up, pair: SCREEN_PAIRS[tone][axis] };
 
   const out = screenCore(rgb, Wc, Hc, axis, tone);
 
@@ -268,7 +291,199 @@ function render(updateDl = true) {
   else outCanvas.removeAttribute("data-draggable");
 
   fitCanvas();
+  // The base frame changed, so any running motion is stale — restart it on the
+  // new treatment. A fresh image load plays the dissolve entrance first (which
+  // hands off to the scan loop itself when done).
+  const entrance = pendingDissolve && dissolveOn;
+  pendingDissolve = false;
+  if (entrance) startDissolve();
+  else if (scanOn) startMotion();
+  else stopMotion();
   if (updateDl) updateDownload();
+}
+
+// ---- Motion ----
+// Two canvas animations, both driven off the cached tone field (the treatment
+// pipeline minus the threshold, from screenToneField), so each frame is one
+// cheap threshold pass — nothing re-runs the histogram. Both paint only the
+// two palette endpoints, so the image stays a 2-level bitmap (and the WCAG
+// guarantee holds) throughout. Preview only — exports stay static.
+//
+//   Scan — an ambient loop (a refresh sweep, à la an Amiga copper bar): a
+//          soft Gaussian band drifts down the grid, lifting the dither
+//          threshold as it passes so a thin rim of extra dots lights within
+//          it. The motion follows the band, not the tone, so it is edge-
+//          neutral and works on any subject.
+//   Load — the dissolve entrance: on image load the picture materialises from
+//          blank in dither-matrix order. One-shot; see startDissolve.
+
+// Scan constants, anchored to the dither structure (copper bars have no
+// canonical parameters of their own):
+//   AMP   — peak threshold lift as k/64, so the band lights k of the matrix's
+//           64 ranks at its centre. k = 4 (a Bayer-native step, 1/16 of the
+//           range).
+//   WIDTH — band sigma as a fraction of grid height, at the "knee": the
+//           narrowest band with no perceptibly-frozen zone. The far point
+//           (Hc/2, at 0.5/WIDTH sigma) gets boost AMP*exp(-(0.5/WIDTH)^2/2),
+//           which lights ≈ that fraction of cells; pinning it to a negligible
+//           ε ≈ 2.4e-4 gives WIDTH = 0.5/sqrt(2*ln(AMP/ε)) ≈ 0.15.
+// A fixed point brightens and dims once per sweep (0.2Hz) — far under WCAG
+// 2.3.1's 3-flash limit.
+const SCAN_AMP = 4 / 64,
+  SCAN_WIDTH = 0.15;
+
+// The two motion clocks, both 5000ms so all motion shares one cadence:
+// 5000ms = one resting human breath (~12/min, 0.2Hz), the slow-physiology
+// tempo that reads as calm rather than busy. SCAN_SWEEP_MS is ms for the band
+// to cross top to bottom; DISSOLVE_MS is ms for the entrance to fully resolve.
+const SCAN_SWEEP_MS = 5000,
+  DISSOLVE_MS = 5000;
+
+const B8 = SCREEN_BAYER;
+
+let anim = null; // {canvas, ctx, image, t, start, raf}
+
+function stopMotion() {
+  if (anim) cancelAnimationFrame(anim.raf);
+  anim = null;
+}
+
+// Shared frame state for the scan loop and the dissolve entrance: an offscreen
+// grid-size canvas and the tone field of the current crop.
+function buildAnim() {
+  const { rgb, Wc, Hc } = lastRender;
+  const canvas = document.createElement("canvas");
+  canvas.width = Wc;
+  canvas.height = Hc;
+  const ctx = canvas.getContext("2d");
+  const image = ctx.createImageData(Wc, Hc);
+  for (let i = 0; i < Wc * Hc; i++) image.data[i * 4 + 3] = 255;
+  anim = {
+    canvas,
+    ctx,
+    image,
+    t: screenToneField(rgb, Wc, Hc),
+    start: 0,
+    raf: 0,
+  };
+}
+
+function blitAnim() {
+  anim.ctx.putImageData(anim.image, 0, 0);
+  const ux = outCanvas.getContext("2d");
+  ux.imageSmoothingEnabled = false;
+  ux.drawImage(anim.canvas, 0, 0, outCanvas.width, outCanvas.height);
+}
+
+function startMotion() {
+  stopMotion();
+  buildAnim();
+  anim.raf = requestAnimationFrame(motionFrame);
+}
+
+function motionFrame(ts) {
+  if (!anim) return;
+  if (!anim.start) anim.start = ts;
+  // Scan is the only ambient loop: the band position is a continuous
+  // function of wall time, repainted every frame.
+  scanFrame(ts - anim.start);
+  blitAnim();
+  anim.raf = requestAnimationFrame(motionFrame);
+}
+
+// A soft Gaussian band centred at row yc drifts down the grid over
+// SCAN_SWEEP_MS, lowering the dither threshold within it (brighter). The
+// distance to the band wraps top-to-bottom so the sweep is seamless. The
+// per-row boost is constant across x, so it costs one exp() per row.
+//
+// `reveal` (0..1) is the dissolve-entrance gate: a cell only shows once its
+// matrix rank is below reveal, so Load can dissolve in the already-scanning
+// image. reveal = 1 (the steady-state default) opens the gate everywhere.
+function scanFrame(elapsed, reveal = 1) {
+  const { Wc, Hc } = lastRender;
+  const [shadow, high] = lastRender.pair;
+  const yc = ((elapsed % SCAN_SWEEP_MS) / SCAN_SWEEP_MS) * Hc;
+  const sigma = Math.max(1, SCAN_WIDTH * Hc);
+  const twoSigma2 = 2 * sigma * sigma;
+  const t = anim.t,
+    d = anim.image.data;
+  for (let y = 0; y < Hc; y++) {
+    let dy = Math.abs(y - yc);
+    if (dy > Hc - dy) dy = Hc - dy; // seamless wrap
+    const boost = SCAN_AMP * Math.exp(-(dy * dy) / twoSigma2);
+    for (let x = 0; x < Wc; x++) {
+      const i = y * Wc + x;
+      const b = B8[(y & 7) * 8 + (x & 7)];
+      const c = b < reveal && t[i] > b - boost ? high : shadow;
+      d[i * 4] = c[0];
+      d[i * 4 + 1] = c[1];
+      d[i * 4 + 2] = c[2];
+    }
+  }
+}
+
+// Dissolve entrance (one-shot), the HyperCard / Game Boy fade lineage. The
+// image materialises from blank in dither-matrix order over DISSOLVE_MS: a
+// cell shows its treated value once progress passes its matrix rank, holding
+// the shadow ink until then. On a 2-level image this reveal is identical to
+// rendering min(tone, progress) — a fade from black through the image's own
+// dither. dissolvePaint is the plain reveal (Scan off); when Scan is also on
+// the reveal runs through scanFrame instead, so the picture arrives already
+// sweeping. Either way, when complete it hands off to the scan loop if on.
+function dissolvePaint(p) {
+  const [shadow, high] = lastRender.pair;
+  paintFrame(
+    (x, y) => {
+      const b = B8[(y & 7) * 8 + (x & 7)];
+      return b < p ? b : Infinity;
+    },
+    high,
+    shadow,
+  );
+  blitAnim();
+}
+
+function startDissolve() {
+  stopMotion();
+  buildAnim();
+  dissolvePaint(0); // blank immediately — no flash of the full base frame
+  anim.raf = requestAnimationFrame(dissolveFrame);
+}
+
+function dissolveFrame(ts) {
+  if (!anim) return;
+  if (!anim.start) anim.start = ts;
+  const elapsed = ts - anim.start;
+  const p = Math.min(1, elapsed / DISSOLVE_MS);
+  // Quantise to the 64 matrix levels — the stepped cadence of a period
+  // dissolve (one threshold level at a time), not a smooth ramp.
+  const reveal = p === 1 ? 1 : Math.floor(p * 64) / 64;
+  // With Scan also on, reveal the already-scanning image; otherwise a plain
+  // reveal from black.
+  if (scanOn) {
+    scanFrame(elapsed, reveal);
+    blitAnim();
+  } else dissolvePaint(reveal);
+  if (p < 1) anim.raf = requestAnimationFrame(dissolveFrame);
+  // Hand off to the steady scan loop reusing the same anim, so elapsed (and
+  // thus the band position) carries over with no jump.
+  else if (scanOn) anim.raf = requestAnimationFrame(motionFrame);
+  else anim = null; // the p=1 frame is exactly the base treatment
+}
+
+// Repaint every cell: tone above the cutoff gets onColor, else offColor.
+function paintFrame(thresholdAt, onColor, offColor) {
+  const { Wc, Hc } = lastRender;
+  const t = anim.t,
+    d = anim.image.data;
+  for (let y = 0; y < Hc; y++)
+    for (let x = 0; x < Wc; x++) {
+      const i = y * Wc + x;
+      const c = t[i] > thresholdAt(x, y) ? onColor : offColor;
+      d[i * 4] = c[0];
+      d[i * 4 + 1] = c[1];
+      d[i * 4 + 2] = c[2];
+    }
 }
 
 // ---- 1-bit indexed PNG encoder ----
