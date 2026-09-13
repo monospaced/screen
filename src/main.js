@@ -814,13 +814,26 @@ async function adaptiveSvg() {
 // tone (adaptive theming is composed outside Screen from separate exports), so
 // no filter/scheme juggling — just faithful canvas frames. Scan → seamless
 // loop; Load → dissolve entrance, played once, freezing on the full image;
-// both → the concurrent entrance once. Frame count is per-mode: the perpetual
-// Scan loop gets 96 (~20fps) since it's on screen forever and smoother motion
-// is worth it, while anything with the Load dissolve stays at 64 — that matches
-// the dissolve's 64 Bayer reveal steps exactly, and the entrance is a one-time
-// transient where extra frames would only add bytes.
+// both → the concurrent entrance once.
+//
+// Frame count is per-mode, and only one mode is timing-critical:
+//   Scan (96, ~20fps) — perpetual loop; its delta is just the thin moving band,
+//     cheap to decode, and nothing waits on its exact duration.
+//   Load (64) — plays once and freezes on the full image. Nothing waits on it
+//     either: if a slow decoder stretches it, the entrance just resolves later,
+//     then holds. So it keeps the smooth 1-Bayer-rank-per-frame reveal.
+//   Load+Scan (32) — the only timing-critical case: it's played once and then
+//     hidden by a fixed JS timer (~5s from load) to reveal the Scan loop under
+//     it, since there's no "animation ended" event. So it MUST play a
+//     predictable 5s on every engine. Its per-frame delta is full-frame (the
+//     dissolve reveals cells scattered across the whole image in Bayer order),
+//     and at 64 such frames Safari/WebKit can't decode on schedule — it plays
+//     the 5s entrance in ~11s (Chrome plays it true), so the timer fires
+//     mid-dissolve. 32 halves the decode load back within Safari's budget
+//     (2 Bayer ranks per frame), barely noticeable on a one-time entrance.
 const SCAN_FRAMES = 96,
-  DISSOLVE_FRAMES = 64;
+  LOAD_FRAMES = 64,
+  LOAD_SCAN_FRAMES = 32;
 
 async function motionWebP(isStale) {
   const { rgb, Wc, Hc, up } = lastRender;
@@ -846,9 +859,13 @@ async function motionWebP(isStale) {
     }
     return lit;
   };
-  // Load (or Load+Scan) uses the dissolve's frame count; a pure Scan loop
-  // uses the smoother scan count.
-  const N = dissolveOn ? DISSOLVE_FRAMES : SCAN_FRAMES;
+  // Load+Scan is capped for Safari's decode budget (it's the timing-critical,
+  // hidden-after-5s case); Load-only stays smooth; pure Scan uses its own count.
+  const N = dissolveOn
+    ? scanOn
+      ? LOAD_SCAN_FRAMES
+      : LOAD_FRAMES
+    : SCAN_FRAMES;
   const lits = [];
   for (let k = 0; k < N; k++) {
     const yc = scanOn ? (k / N) * Hc : null;
