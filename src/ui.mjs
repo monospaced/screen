@@ -72,9 +72,6 @@ function sidebar() {
             { label: "Light", value: "light" },
           ],
         }) +
-        // Motion: two independent switches (see the Motion section in
-        // main.js). Switch, not Checkbox, because each applies immediately.
-        // The Load switch keeps id="dissolve" — its mechanism is the dissolve.
         renderSetFieldset({
           id: "motion",
           legend: "Motion",
