@@ -11,6 +11,7 @@ import {
   renderSetButton,
   renderSetContainer,
   renderSetDivider,
+  renderSetFieldset,
   renderSetHeading,
   renderSetInline,
   renderSetLightswitch,
@@ -23,6 +24,7 @@ import {
   renderSetSidebar,
   renderSetStack,
   renderSetSurface,
+  renderSetSwitch,
   SET_LIGHTSWITCH_STORAGE_KEY,
 } from "@monospaced/set-core";
 
@@ -63,12 +65,36 @@ function sidebar() {
           name: "tone",
           legend: "Tone",
           size: "sm",
-          value: "dark",
+          value: "mid",
           radios: [
             { label: "Dark", value: "dark" },
             { label: "Mid", value: "mid" },
             { label: "Light", value: "light" },
           ],
+        }) +
+        // Motion: two independent switches (see the Motion section in
+        // main.js). Switch, not Checkbox, because each applies immediately.
+        // The Load switch keeps id="dissolve" — its mechanism is the dissolve.
+        renderSetFieldset({
+          id: "motion",
+          legend: "Motion",
+          children: `<div style="padding-block-start: var(--set-spacing-vertical-250)">${renderSetStack(
+            {
+              gap: "xs",
+              children:
+                renderSetSwitch({
+                  id: "scan",
+                  label: "Scan",
+                  size: "sm",
+                }) +
+                renderSetSwitch({
+                  id: "dissolve",
+                  label: "Load",
+                  size: "sm",
+                  checked: true, // on by default → entrance dissolve on app load
+                }),
+            },
+          )}</div>`,
         }),
     }),
   });
@@ -106,7 +132,7 @@ function toolbar() {
     triggerLabel: "Download",
     triggerLabelVisibility: "hiddenBelowTablet",
     items: [
-      { id: "png", label: "PNG" },
+      { id: "png", label: "PNG / WebP" },
       { id: "svg", label: "SVG" },
     ],
   });

@@ -3,3 +3,7 @@ dist/
 treated/
 .vscode/
 .DS_Store
+
+# Claude Code: track shared project settings, ignore local overrides and scratch
+.claude/settings.local.json
+.claude/.cc-writes/
