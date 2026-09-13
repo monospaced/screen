@@ -35,7 +35,7 @@ const RES = 640,
   OG_W = 1200,
   OG_H = 630;
 let axis = "cyan",
-  tone = "dark",
+  tone = "mid",
   ratio = "default",
   img = null,
   baseName = "image";
@@ -50,7 +50,7 @@ let cropX = 0.5,
 // Motion state — declared with the top-level state because loadImage (called
 // at module eval for the demo image) writes the pending-dissolve flag.
 let scanOn = false, // ambient scan sweep loop
-  dissolveOn = false, // dissolve-in entrance on image load
+  dissolveOn = true, // dissolve-in entrance on image load (Load on by default)
   pendingDissolve = false; // set on image load, consumed by render()
 const stage = document.getElementById("stage");
 // Current export blobs, keyed by menu item id; null until the first
@@ -716,25 +716,33 @@ function webpFrame(lit, litPrev, Wc, Hc, up, pair) {
 }
 
 // `lits` is an array of grid-resolution 0/1 bitmaps (one per step). loop 0
-// loops forever; frameMs is each frame's duration. `isStale` (optional) lets a
-// newer rebuild abort this one mid-encode. Yields to the event loop between
-// batches so the main-thread encode never blocks input or the live animation.
-async function encodeScreenWebP(lits, Wc, Hc, up, pair, loop, frameMs, isStale) {
+// loops forever; sweepMs is the total animation duration — per-frame durations
+// are distributed so they sum to it *exactly* (round the cumulative time, not
+// each frame), so the total is a clean contract value (Set times the Load→Scan
+// swap off it, and animated WebP fires no end event to detect). `isStale`
+// (optional) lets a newer rebuild abort this one mid-encode. Yields to the
+// event loop between batches so the main-thread encode never blocks the UI.
+async function encodeScreenWebP(lits, Wc, Hc, up, pair, loop, sweepMs, isStale) {
   const W = Wc * up,
     H = Hc * up;
+  const N = lits.length;
   const enc = async (data, w, h) =>
     extractVP8L(new Uint8Array(await encodeWebpFrame({ data, width: w, height: h }, { lossless: 1 })));
   const parts = [];
-  for (let k = 0; k < lits.length; k++) {
+  for (let k = 0; k < N; k++) {
     if (isStale?.()) return null; // superseded — stop wasting main-thread time
+    // Drift-free: frame k spans the gap between two rounded cumulative times,
+    // so the durations sum to round(sweepMs) with no accumulated rounding error.
+    const ms =
+      Math.round(((k + 1) * sweepMs) / N) - Math.round((k * sweepMs) / N);
     const f = webpFrame(lits[k], k > 0 ? lits[k - 1] : null, Wc, Hc, up, pair);
     if (!f) {
       // Identical frame: a 2x2 fully-transparent blend frame carries duration.
       const vp8l = await enc(new Uint8ClampedArray(2 * 2 * 4), 2, 2);
-      parts.push(anmf(0, 0, 2, 2, frameMs, false, vp8l));
+      parts.push(anmf(0, 0, 2, 2, ms, false, vp8l));
     } else {
       const vp8l = await enc(f.data, f.w, f.h);
-      parts.push(anmf(f.x, f.y, f.w, f.h, frameMs, f.full, vp8l));
+      parts.push(anmf(f.x, f.y, f.w, f.h, ms, f.full, vp8l));
     }
     // Every 8th frame, hand the main thread back so queued input and rAF paints
     // run between batches (setTimeout, not rAF — rAF is throttled under load).
@@ -850,8 +858,9 @@ async function motionWebP(isStale) {
     lits.push(frameLit(yc, reveal));
   }
   const loop = dissolveOn ? 1 : 0; // Load plays once; Scan loops forever
-  const frameMs = Math.round(SCAN_SWEEP_MS / N);
-  return encodeScreenWebP(lits, Wc, Hc, up, pair, loop, frameMs, isStale);
+  // Total duration is exactly SCAN_SWEEP_MS — the Load entrance runs 5000ms,
+  // which Set relies on to time the swap to the Scan loop.
+  return encodeScreenWebP(lits, Wc, Hc, up, pair, loop, SCAN_SWEEP_MS, isStale);
 }
 
 // Successive calls can interleave (crop drag end vs radio change); the token
@@ -897,20 +906,29 @@ async function updateDownload() {
     adaptiveSvg(),
   ]);
   if (token !== dlToken || image == null) return;
-  const toneSuffix = tone === "dark" ? "" : `--${tone}`;
-  const animSuffix = motion ? "--anim" : "";
+  const toneSuffix = `--${tone}`; // scheme goes last in the filename (below)
+  // Name the motion so exports are distinguishable: --scan, --load, or
+  // --load-scan (both). Static stills carry no motion suffix.
+  const animSuffix =
+    scanOn && dissolveOn
+      ? "--load-scan"
+      : dissolveOn
+        ? "--load"
+        : scanOn
+          ? "--scan"
+          : "";
   const imageExt = motion ? "webp" : "png";
   const imageType = motion ? "image/webp" : "image/png";
   for (const [id, blob, name] of [
     [
       "png",
       new Blob([image], { type: imageType }),
-      `${baseName}--${axis}${toneSuffix}${animSuffix}${suffix}.${imageExt}`,
+      `${baseName}--${axis}${animSuffix}${suffix}${toneSuffix}.${imageExt}`,
     ],
     [
       "svg",
       new Blob([svg], { type: "image/svg+xml" }),
-      `${baseName}--${axis}--adaptive${suffix}.svg`,
+      `${baseName}--${axis}${suffix}--adaptive.svg`,
     ],
   ]) {
     if (downloads[id]) URL.revokeObjectURL(downloads[id].url);

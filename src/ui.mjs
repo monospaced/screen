@@ -65,7 +65,7 @@ function sidebar() {
           name: "tone",
           legend: "Tone",
           size: "sm",
-          value: "dark",
+          value: "mid",
           radios: [
             { label: "Dark", value: "dark" },
             { label: "Mid", value: "mid" },
@@ -91,6 +91,7 @@ function sidebar() {
                   id: "dissolve",
                   label: "Load",
                   size: "sm",
+                  checked: true, // on by default → entrance dissolve on app load
                 }),
             },
           )}</div>`,
