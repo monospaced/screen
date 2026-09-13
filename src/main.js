@@ -319,7 +319,8 @@ function render(updateDl = true) {
 // pipeline minus the threshold, from screenToneField), so each frame is one
 // cheap threshold pass — nothing re-runs the histogram. Both paint only the
 // two palette endpoints, so the image stays a 2-level bitmap (and the WCAG
-// guarantee holds) throughout. Preview only — exports stay static.
+// guarantee holds) throughout. These are the live on-screen preview; the
+// download re-bakes the same frames as an animated WebP (see motionWebP).
 //
 //   Scan — an ambient loop (a refresh sweep, à la an Amiga copper bar): a
 //          soft Gaussian band drifts down the grid, lifting the dither
@@ -536,7 +537,7 @@ async function deflate(bytes) {
 
 // out: screenCore RGB buffer at grid size; the nearest-neighbour x`up`
 // upscale as 1-bit filter-0 scanlines. Any pixel that isn't the shadow colour
-// is the highlight (2-level guarantee). Shared by the PNG and APNG encoders.
+// is the highlight (2-level guarantee).
 function screenRaw(out, Wc, Hc, up, pair) {
   const W = Wc * up,
     H = Hc * up;
@@ -559,12 +560,12 @@ function screenRaw(out, Wc, Hc, up, pair) {
   return raw;
 }
 
-function ihdrIndexed(W, H, depth) {
+function ihdrIndexed(W, H) {
   const ihdr = new Uint8Array(13);
   const view = new DataView(ihdr.buffer);
   view.setUint32(0, W);
   view.setUint32(4, H);
-  ihdr[8] = depth; // bit depth
+  ihdr[8] = 1; // bit depth: 1-bit (2-colour indexed)
   ihdr[9] = 3; // colour type: indexed
   return ihdr;
 }
@@ -578,7 +579,7 @@ async function encodeScreenPNG(out, Wc, Hc, up, pair) {
   const raw = screenRaw(out, Wc, Hc, up, pair);
   const parts = [
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-    pngChunk("IHDR", ihdrIndexed(W, H, 1)),
+    pngChunk("IHDR", ihdrIndexed(W, H)),
     pngChunk("PLTE", new Uint8Array([...shadow, ...high])),
     pngChunk("IDAT", await deflate(raw)),
     pngChunk("IEND", new Uint8Array(0)),
@@ -603,13 +604,11 @@ function concatChunks(parts) {
 }
 
 // ---- animated lossless WebP encoder ----
-// Same transparency-delta idea as the old APNG path, but each frame is a
-// lossless WebP (VP8L, via jSquash) and we hand-mux the RIFF animation
-// container ourselves. Frame 0 is the full image; each later frame is the
-// bounding box of the cells that changed, with unchanged pixels transparent
-// so it blends OVER the accumulated canvas. ~2.8x smaller than the APNG for
-// the same pixels (verified pixel-exact), and no more portable-format concern
-// than APNG for the animated case.
+// Each frame is a lossless WebP (VP8L, via jSquash); we hand-mux the RIFF
+// animation container ourselves. Frame 0 is the full image; each later frame
+// is the bounding box of the cells that changed, with unchanged pixels left
+// transparent so it blends OVER the accumulated canvas. That transparency-
+// delta keeps the file small while staying pixel-exact to the canvas frames.
 
 const u24 = (n) => [n & 255, (n >> 8) & 255, (n >> 16) & 255];
 

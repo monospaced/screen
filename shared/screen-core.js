@@ -61,8 +61,9 @@
   // with no text over it, sitting acceptably on both light and dark
   // surroundings. No text guarantee, but black keeps >= 3:1 against both
   // endpoints (the 900 primitives are floored for exactly this) — WCAG
-  // 1.4.11, so the black logo mark can sit on mid imagery. PNG export only
-  // (the adaptive SVG embeds dark + light). The neutral ramp is spread too
+  // 1.4.11, so the black logo mark can sit on mid imagery. Single-tone raster
+  // (PNG / animated WebP) export only — the adaptive SVG embeds dark + light.
+  // The neutral ramp is spread too
   // evenly for its strict between-segment (700-600, 1.66) to match the ink
   // separations, so neutral mid shares its highlight step with the light
   // shadow: 700-500 at 2.38.
@@ -126,8 +127,8 @@
 
   // The pipeline up to (not including) the threshold: luminance -> 2/98
   // auto-levels -> gamma, as a continuous per-cell tone field. Split out so
-  // consumers (e.g. animation experiments) can re-threshold per frame
-  // without re-running the histogram.
+  // the Scan/Load motion can re-threshold per frame without re-running the
+  // histogram.
   function toneField(rgb, W, H) {
     var N = W * H;
     var lum = new Float32Array(N);
