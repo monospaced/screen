@@ -61,6 +61,18 @@ function sidebar() {
           radios: RATIOS.map(({ key, label }) => ({ label, value: key })),
         }) +
         renderSetRadios({
+          id: "resolution",
+          name: "resolution",
+          legend: "Resolution",
+          size: "sm",
+          value: "1280",
+          radios: [
+            { label: "640", value: "640" },
+            { label: "1280", value: "1280" },
+            { label: "2560", value: "2560" },
+          ],
+        }) +
+        renderSetRadios({
           id: "tone",
           name: "tone",
           legend: "Tone",

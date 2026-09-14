@@ -30,13 +30,19 @@ defineSetLightswitch();
 defineSetMenu();
 
 const { screenCore, screenToneField, SCREEN_PAIRS, SCREEN_BAYER } = globalThis;
-const RES = 640,
-  UPSCALE = 2,
+// Output = grid (RES) × UPSCALE. UPSCALE stays 2 (the hard 2×2 "dot"); the
+// Resolution control varies the grid, so 640/1280/2560 = grid 320/640/1280
+// dots. Constant dot size, more dots = finer. RES fixes the output WIDTH for
+// the aspect presets — a portrait ratio just runs taller (4:5 at res 1280 is
+// 1280×1600) — and the longest edge for the free-form default. Grid is derived
+// per render from `resolution`; the OG preset keeps its fixed 1200×630.
+const UPSCALE = 2,
   OG_W = 1200,
   OG_H = 630;
 let axis = "cyan",
   tone = "mid",
   ratio = "default",
+  resolution = "1280", // output longest edge in px: "640" | "1280" | "2560"
   img = null,
   baseName = "image";
 // Crop position for the aspect-ratio presets, as fractions of the crop slack
@@ -85,6 +91,10 @@ document.getElementById("ratio").addEventListener("change", (e) => {
 });
 document.getElementById("tone").addEventListener("change", (e) => {
   tone = e.target.value;
+  if (img) render();
+});
+document.getElementById("resolution").addEventListener("change", (e) => {
+  resolution = e.target.value;
   if (img) render();
 });
 document.getElementById("scan").addEventListener("change", (e) => {
@@ -218,6 +228,7 @@ loadImage(exampleUrl, "example");
 function render(updateDl = true) {
   const w = img.naturalWidth,
     h = img.naturalHeight;
+  const RES = Number(resolution) / UPSCALE; // grid longest edge (dots)
   let Wc, Hc, up;
   const g = document.createElement("canvas");
   const gx = g.getContext("2d");
@@ -822,18 +833,19 @@ async function adaptiveSvg() {
 //   Load (64) — plays once and freezes on the full image. Nothing waits on it
 //     either: if a slow decoder stretches it, the entrance just resolves later,
 //     then holds. So it keeps the smooth 1-Bayer-rank-per-frame reveal.
-//   Load+Scan (32) — the only timing-critical case: it's played once and then
-//     hidden by a fixed JS timer (~5s from load) to reveal the Scan loop under
-//     it, since there's no "animation ended" event. So it MUST play a
-//     predictable 5s on every engine. Its per-frame delta is full-frame (the
-//     dissolve reveals cells scattered across the whole image in Bayer order),
-//     and at 64 such frames Safari/WebKit can't decode on schedule — it plays
-//     the 5s entrance in ~11s (Chrome plays it true), so the timer fires
-//     mid-dissolve. 32 halves the decode load back within Safari's budget
-//     (2 Bayer ranks per frame), barely noticeable on a one-time entrance.
+//   Load+Scan — the only timing-critical case: it's played once and then hidden
+//     by a fixed JS timer (~5s from load) to reveal the Scan loop under it,
+//     since there's no "animation ended" event. So it MUST play a predictable
+//     5s on every engine. Its per-frame delta is full-frame (the dissolve
+//     reveals cells scattered across the whole image in Bayer order), and at
+//     full frame count Safari can't decode on schedule — at 1280 it stretches a
+//     5s entrance to ~11s (Chrome plays it true). Decode cost scales with pixels
+//     (∝ resolution²), so the safe frame count scales inversely: quartering the
+//     pixels lets us quadruple the frames. Keyed off the Resolution control, all
+//     three confirmed to play ~5s in Safari (2560 is a coarse 8-step dissolve).
 const SCAN_FRAMES = 96,
-  LOAD_FRAMES = 64,
-  LOAD_SCAN_FRAMES = 32;
+  LOAD_FRAMES = 64;
+const LOAD_SCAN_FRAMES = { 640: 64, 1280: 32, 2560: 8 };
 
 async function motionWebP(isStale) {
   const { rgb, Wc, Hc, up } = lastRender;
@@ -860,10 +872,11 @@ async function motionWebP(isStale) {
     return lit;
   };
   // Load+Scan is capped for Safari's decode budget (it's the timing-critical,
-  // hidden-after-5s case); Load-only stays smooth; pure Scan uses its own count.
+  // hidden-after-5s case) per the active resolution; Load-only stays smooth;
+  // pure Scan uses its own count.
   const N = dissolveOn
     ? scanOn
-      ? LOAD_SCAN_FRAMES
+      ? LOAD_SCAN_FRAMES[resolution]
       : LOAD_FRAMES
     : SCAN_FRAMES;
   const lits = [];
@@ -935,16 +948,19 @@ async function updateDownload() {
           : "";
   const imageExt = motion ? "webp" : "png";
   const imageType = motion ? "image/webp" : "image/png";
+  // Resolution suffix (empty for the 1280 default, like Ratio) so exports at
+  // different resolutions don't collide.
+  const resSuffix = resolution === "1280" ? "" : `--${resolution}`;
   for (const [id, blob, name] of [
     [
       "png",
       new Blob([image], { type: imageType }),
-      `${baseName}--${axis}${animSuffix}${suffix}${toneSuffix}.${imageExt}`,
+      `${baseName}--${axis}${animSuffix}${suffix}${resSuffix}${toneSuffix}.${imageExt}`,
     ],
     [
       "svg",
       new Blob([svg], { type: "image/svg+xml" }),
-      `${baseName}--${axis}${suffix}--adaptive.svg`,
+      `${baseName}--${axis}${suffix}${resSuffix}--adaptive.svg`,
     ],
   ]) {
     if (downloads[id]) URL.revokeObjectURL(downloads[id].url);
