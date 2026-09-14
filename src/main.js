@@ -935,7 +935,7 @@ async function updateDownload() {
     adaptiveSvg(),
   ]);
   if (token !== dlToken || image == null) return;
-  const toneSuffix = `--${tone}`; // scheme goes last in the filename (below)
+  const toneSuffix = `--${tone}`; // tone (Set's light/dark scheme) goes last
   // Name the motion so exports are distinguishable: --scan, --load, or
   // --load-scan (both). Static stills carry no motion suffix.
   const animSuffix =
@@ -955,7 +955,7 @@ async function updateDownload() {
     [
       "png",
       new Blob([image], { type: imageType }),
-      `${baseName}--${axis}${animSuffix}${suffix}${resSuffix}${toneSuffix}.${imageExt}`,
+      `${baseName}--${axis}${suffix}${resSuffix}${animSuffix}${toneSuffix}.${imageExt}`,
     ],
     [
       "svg",
