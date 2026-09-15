@@ -149,9 +149,14 @@ document.getElementById("file").onchange = (e) => {
 
 function loadImage(src, name) {
   const im = new Image();
+  // Once the load settles the object URL can go (revoking a plain URL, like
+  // the demo asset's, is a no-op) — otherwise each opened file leaks its blob
+  // for the session's lifetime.
+  im.onerror = () => URL.revokeObjectURL(src);
   // All state commits on success — a failed load (corrupt/unsupported file)
   // must not leave the old image with a new name and a pending entrance.
   im.onload = () => {
+    URL.revokeObjectURL(src);
     baseName = name;
     cropX = 0.5;
     cropY = 0.5;
