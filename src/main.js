@@ -625,20 +625,13 @@ async function encodeScreenPNG(out, Wc, Hc, up, pair) {
   const shadow = pair[0],
     high = pair[1];
   const raw = screenRaw(out, Wc, Hc, up, pair);
-  const parts = [
+  return concatChunks([
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
     pngChunk("IHDR", ihdrIndexed(W, H)),
     pngChunk("PLTE", new Uint8Array([...shadow, ...high])),
     pngChunk("IDAT", await deflate(raw)),
     pngChunk("IEND", new Uint8Array(0)),
-  ];
-  const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-  let offset = 0;
-  for (const p of parts) {
-    bytes.set(p, offset);
-    offset += p.length;
-  }
-  return bytes;
+  ]);
 }
 
 function concatChunks(parts) {
@@ -771,19 +764,9 @@ function webpFrame(lit, litPrev, Wc, Hc, up, pair) {
 // loops forever; sweepMs is the total animation duration — per-frame durations
 // are distributed so they sum to it *exactly* (round the cumulative time, not
 // each frame), so the total is a clean contract value (Set times the Load→Scan
-// swap off it, and animated WebP fires no end event to detect). `isStale`
-// (optional) lets a newer rebuild abort this one mid-encode. Yields to the
+// swap off it, and animated WebP fires no end event to detect). Yields to the
 // event loop between batches so the main-thread encode never blocks the UI.
-async function encodeScreenWebP(
-  lits,
-  Wc,
-  Hc,
-  up,
-  pair,
-  loop,
-  sweepMs,
-  isStale,
-) {
+async function encodeScreenWebP(lits, Wc, Hc, up, pair, loop, sweepMs) {
   const W = Wc * up,
     H = Hc * up;
   const N = lits.length;
@@ -795,7 +778,6 @@ async function encodeScreenWebP(
     );
   const parts = [];
   for (let k = 0; k < N; k++) {
-    if (isStale?.()) return null; // superseded — stop wasting main-thread time
     // Drift-free: frame k spans the gap between two rounded cumulative times,
     // so the durations sum to round(sweepMs) with no accumulated rounding error.
     const ms =
