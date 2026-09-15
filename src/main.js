@@ -139,15 +139,20 @@ document.getElementById("file").onchange = (e) => {
   const f = e.target.files[0];
   if (!f) return;
   loadImage(URL.createObjectURL(f), f.name.replace(/\.[^.]+$/, ""));
+  // Clear the input so choosing the same file again refires change — e.g.
+  // retrying after a failed load.
+  e.target.value = "";
 };
 
 function loadImage(src, name) {
-  baseName = name;
-  cropX = 0.5;
-  cropY = 0.5;
-  pendingDissolve = true; // entrance plays on the load's first render
   const im = new Image();
+  // All state commits on success — a failed load (corrupt/unsupported file)
+  // must not leave the old image with a new name and a pending entrance.
   im.onload = () => {
+    baseName = name;
+    cropX = 0.5;
+    cropY = 0.5;
+    pendingDissolve = true; // entrance plays on the load's first render
     img = im;
     render();
   };
