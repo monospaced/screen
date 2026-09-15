@@ -12,24 +12,24 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0
       '@monospaced/set-assets':
-        specifier: ^0.13.0
-        version: 0.13.0
+        specifier: ^0.16.0
+        version: 0.16.0
       '@monospaced/set-core':
-        specifier: ^0.13.0
-        version: 0.13.0
+        specifier: ^0.16.0
+        version: 0.16.0
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.8.0)
       '@monospaced/set-config':
-        specifier: ^0.13.0
-        version: 0.13.0(eslint@10.8.0)(stylelint@17.14.1)
+        specifier: ^0.16.0
+        version: 0.16.0(eslint@10.8.0)(stylelint@17.14.1)
       '@monospaced/set-skills':
-        specifier: ^0.13.0
-        version: 0.13.0
+        specifier: ^0.16.0
+        version: 0.16.0
       '@monospaced/set-tokens':
-        specifier: ^0.13.0
-        version: 0.13.0
+        specifier: ^0.16.0
+        version: 0.16.0
       eslint:
         specifier: ^10.8.0
         version: 10.8.0
@@ -177,23 +177,23 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@monospaced/set-assets@0.13.0':
-    resolution: {integrity: sha512-ggkWuTI1X4PDjLyqwpCdnKdERQMZI7Hu1a61+b06FI/96IuExSuzOnjxiwQTV3/5vVFApSWrPGL7DjDI3hmhQA==}
+  '@monospaced/set-assets@0.16.0':
+    resolution: {integrity: sha512-yjAXwmF13yBO7S/kXRicuIS0K0bp1WvMRvx0IQrW+vpuyaXwMz+yOFss33DpZlNooZV0YF8v7jcH3r8MiOey0w==}
 
-  '@monospaced/set-config@0.13.0':
-    resolution: {integrity: sha512-qMhtBdTsEVNUk8wN0+vDDvDjht0hG5JaXOQqCG96ofAKu2HCbSTegVlA26BzjSV6cpiTcpxdEPAnD+nejCeW8w==}
+  '@monospaced/set-config@0.16.0':
+    resolution: {integrity: sha512-vnFYl33lMbqL5FEbNZhG7JkyP8kDIbJ88gpMViuC/oHu0KK+awT8/bR9dHdMw2fgstG1OCV/brJGpEa3JHAl9A==}
     peerDependencies:
       eslint: ^10.0.0
       stylelint: ^17.0.0
 
-  '@monospaced/set-core@0.13.0':
-    resolution: {integrity: sha512-ggY45IZ/TCINDwGl5CjQqgZ4rNF9e8JcqfWHeymqX/rmpKIpBf3JymG1PJMyX5qos0q3LOlaTGomzhgvZZtFiA==}
+  '@monospaced/set-core@0.16.0':
+    resolution: {integrity: sha512-ynm/PXGKn0Pe+Eq5OFcq6vycsmHXGBqiUKsm7J2Ll99Yw1/CtS1SJbKLT7a8r2RvuF7vErriKylsCSsOuBiVHw==}
 
-  '@monospaced/set-skills@0.13.0':
-    resolution: {integrity: sha512-hyHCxNy2YHUkCDKA5X1GOYXPQXohR6bA+ilTehohaPilUFlMiT4nQqt55leFG10UTYxoDTWMVQSY50/rWBK0Mw==}
+  '@monospaced/set-skills@0.16.0':
+    resolution: {integrity: sha512-KvEyrFNTblGdtlvbj2L9VDHRHa4TeT26zlKlNM2iFewAGy64Cawen5Rt0IuXNXK3jUmwGuUQgZVjgJCfqESnMw==}
 
-  '@monospaced/set-tokens@0.13.0':
-    resolution: {integrity: sha512-kRiL3LW48Mx3tJJiTVF70JCCrfnvTlYc5qtnv925sOaD6E7kgdnb4ZCo3+zmLtoeDCHjnpm5AJ4K8be7LJdInQ==}
+  '@monospaced/set-tokens@0.16.0':
+    resolution: {integrity: sha512-Ss7Tq59G/OrSpmaf1ViAHISBgfRhvyfOKUqWuZRuzh/YVxAkH35v1oHSz5E8rzX1pLDEkdeq+1o8wNzheGdNZg==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -1192,9 +1192,9 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@monospaced/set-assets@0.13.0': {}
+  '@monospaced/set-assets@0.16.0': {}
 
-  '@monospaced/set-config@0.13.0(eslint@10.8.0)(stylelint@17.14.1)':
+  '@monospaced/set-config@0.16.0(eslint@10.8.0)(stylelint@17.14.1)':
     dependencies:
       eslint: 10.8.0
       eslint-plugin-simple-import-sort: 13.0.0(eslint@10.8.0)
@@ -1204,13 +1204,13 @@ snapshots:
       stylelint-order: 8.1.1(stylelint@17.14.1)
       stylelint-plugin-logical-css: 2.1.0(stylelint@17.14.1)
 
-  '@monospaced/set-core@0.13.0':
+  '@monospaced/set-core@0.16.0':
     dependencies:
       tdesign-icons-svg: 0.4.5
 
-  '@monospaced/set-skills@0.13.0': {}
+  '@monospaced/set-skills@0.16.0': {}
 
-  '@monospaced/set-tokens@0.13.0': {}
+  '@monospaced/set-tokens@0.16.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
