@@ -2,10 +2,12 @@
  * Screen — Set brand image treatment (shared core).
  * Pure JS, no dependencies. Used by the web tool (browser + Canvas); UMD so Node can require it too.
  *
- * screenCore(rgb, W, H, axis, tone)
+ * screenCore(rgb, W, H, axis, tone, field)
  *   rgb   : Uint8 RGB buffer, length W*H*3, already resized to the 640 grid
  *   axis  : "cyan" | "magenta" | "yellow" | "neutral"
  *   tone  : "dark" (default) | "mid" | "light" — the endpoint pair set
+ *   field : optional precomputed toneField(rgb, W, H), so callers that keep
+ *           the field around (the web tool's motion) don't pay for it twice
  *   ->    : Uint8ClampedArray RGB, length W*H*3, treated (2 palette colours only)
  *
  * Pipeline: luminance -> auto-levels (2/98 pct) -> gamma 0.7 -> 8x8 Bayer, 2-level -> map.
@@ -152,7 +154,7 @@
     return t;
   }
 
-  function screenCore(rgb, W, H, axis, tone) {
+  function screenCore(rgb, W, H, axis, tone, field) {
     var axes = PAIRS[tone || "dark"];
     if (!axes) throw new Error("tone must be 'dark', 'mid' or 'light'");
     var pair = axes[axis];
@@ -162,7 +164,7 @@
       high = pair[1],
       N = W * H;
 
-    var t = toneField(rgb, W, H);
+    var t = field || toneField(rgb, W, H);
     var out = new Uint8ClampedArray(N * 3);
     for (var y = 0; y < H; y++)
       for (var x = 0; x < W; x++) {

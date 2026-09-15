@@ -300,10 +300,13 @@ function render() {
     rgb[i * 3 + 2] = src[i * 4 + 2];
   }
   // pair rides along for Motion, which repaints frames on the displayed
-  // treatment's two endpoints.
-  lastRender = { rgb, Wc, Hc, up, pair: SCREEN_PAIRS[tone][axis] };
+  // treatment's two endpoints. The tone field (axis/tone-independent) is
+  // computed once per crop here and reused everywhere — the treatment below,
+  // the motion frames, and the export variants.
+  const t = screenToneField(rgb, Wc, Hc);
+  lastRender = { rgb, Wc, Hc, up, t, pair: SCREEN_PAIRS[tone][axis] };
 
-  const out = screenCore(rgb, Wc, Hc, axis, tone);
+  const out = screenCore(rgb, Wc, Hc, axis, tone, t);
 
   const grid = gx.createImageData(Wc, Hc);
   for (let i = 0; i < Wc * Hc; i++) {
@@ -391,7 +394,7 @@ function stopMotion() {
 // Shared frame state for the scan loop and the dissolve entrance: an offscreen
 // grid-size canvas and the tone field of the current crop.
 function buildAnim() {
-  const { rgb, Wc, Hc } = lastRender;
+  const { Wc, Hc, t } = lastRender;
   const canvas = document.createElement("canvas");
   canvas.width = Wc;
   canvas.height = Hc;
@@ -402,7 +405,7 @@ function buildAnim() {
     canvas,
     ctx,
     image,
-    t: screenToneField(rgb, Wc, Hc),
+    t,
     start: 0,
     raf: 0,
   };
@@ -416,8 +419,13 @@ function blitAnim() {
 }
 
 function startMotion() {
+  // Keep the sweep phase across restarts (control changes, crop-drag
+  // re-renders): carrying `start` over means elapsed — and so the band
+  // position — continues instead of jumping back to the top.
+  const start = anim ? anim.start : 0;
   stopMotion();
   buildAnim();
+  anim.start = start;
   anim.raf = requestAnimationFrame(motionFrame);
 }
 
@@ -820,8 +828,8 @@ function blobToDataURL(blob) {
 
 // Re-treat the current crop for one tone, as 1-bit PNG bytes.
 function variantPNG(variantTone, variantAxis) {
-  const { rgb, Wc, Hc, up } = lastRender;
-  const out = screenCore(rgb, Wc, Hc, variantAxis, variantTone);
+  const { rgb, Wc, Hc, up, t } = lastRender;
+  const out = screenCore(rgb, Wc, Hc, variantAxis, variantTone, t);
   const pair = SCREEN_PAIRS[variantTone][variantAxis];
   return encodeScreenPNG(out, Wc, Hc, up, pair);
 }
@@ -886,9 +894,8 @@ const SCAN_FRAMES = 96,
 const LOAD_SCAN_FRAMES = { 640: 64, 1280: 32, 2560: 8 };
 
 async function motionWebP({ axis, tone, scanOn, dissolveOn, resolution }) {
-  const { rgb, Wc, Hc, up } = lastRender;
+  const { Wc, Hc, up, t } = lastRender;
   const pair = SCREEN_PAIRS[tone][axis];
-  const t = screenToneField(rgb, Wc, Hc);
   const sigma = SCAN_WIDTH * Hc;
   // One frame's grid-resolution 0/1 bitmap: scan band centred at row yc (or
   // none), gated by dissolve progress reveal (1 = fully revealed).
@@ -956,9 +963,7 @@ async function buildVariant(id) {
   // on, otherwise the static 1-bit PNG — WebP for the animated case, but PNG
   // kept for static so the still stays maximally portable (OG images etc.).
   const motion = s.scanOn || s.dissolveOn;
-  const image = motion
-    ? await motionWebP(s)
-    : await variantPNG(s.tone, s.axis);
+  const image = motion ? await motionWebP(s) : await variantPNG(s.tone, s.axis);
   // Name the motion so exports are distinguishable: --scan, --load, or
   // --load-scan (both). Static stills carry no motion suffix.
   const animSuffix =
