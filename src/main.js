@@ -106,6 +106,9 @@ document.getElementById("axis").addEventListener("change", (e) => {
 });
 document.getElementById("ratio").addEventListener("change", (e) => {
   ratio = e.target.value;
+  // OG is always the fixed 1200×630 social-card size — the Resolution control
+  // has no effect on it, so the whole fieldset disables while it's selected.
+  document.getElementById("resolution").disabled = ratio === "og";
   if (img) render();
 });
 document.getElementById("tone").addEventListener("change", (e) => {
@@ -892,13 +895,15 @@ async function adaptiveSvg(variantAxis) {
 //     full frame count Safari can't decode on schedule — at 1280 it stretches a
 //     5s entrance to ~11s (Chrome plays it true). Decode cost scales with pixels
 //     (∝ resolution²), so the safe frame count scales inversely: quartering the
-//     pixels lets us quadruple the frames. Keyed off the Resolution control, all
-//     three confirmed to play ~5s in Safari (2560 is a coarse 8-step dissolve).
+//     pixels lets us quadruple the frames. Keyed off the output's longest edge
+//     (the Resolution control everywhere but OG, whose fixed 1200 width slots
+//     into the 1280 class), all three confirmed to play ~5s in Safari (2560 is
+//     a coarse 8-step dissolve).
 const SCAN_FRAMES = 96,
   LOAD_FRAMES = 64;
-const LOAD_SCAN_FRAMES = { 640: 64, 1280: 32, 2560: 8 };
+const loadScanFrames = (edge) => (edge <= 640 ? 64 : edge <= 1280 ? 32 : 8);
 
-async function motionWebP({ axis, tone, scanOn, dissolveOn, resolution }) {
+async function motionWebP({ axis, tone, scanOn, dissolveOn }) {
   const { Wc, Hc, up, t } = lastRender;
   const pair = SCREEN_PAIRS[tone][axis];
   const sigma = SCAN_WIDTH * Hc;
@@ -922,11 +927,11 @@ async function motionWebP({ axis, tone, scanOn, dissolveOn, resolution }) {
     return lit;
   };
   // Load+Scan is capped for Safari's decode budget (it's the timing-critical,
-  // hidden-after-5s case) per the active resolution; Load-only stays smooth;
+  // hidden-after-5s case) per the actual output size; Load-only stays smooth;
   // pure Scan uses its own count.
   const N = dissolveOn
     ? scanOn
-      ? LOAD_SCAN_FRAMES[resolution]
+      ? loadScanFrames(Math.max(Wc, Hc) * up)
       : LOAD_FRAMES
     : SCAN_FRAMES;
   const lits = [];
@@ -951,8 +956,10 @@ async function buildVariant(id) {
   const s = { axis, tone, ratio, resolution, scanOn, dissolveOn };
   const suffix = s.ratio === "default" ? "" : `--${s.ratio}`;
   // Resolution suffix (empty for the 1280 default, like Ratio) so exports at
-  // different resolutions don't collide.
-  const resSuffix = s.resolution === "1280" ? "" : `--${s.resolution}`;
+  // different resolutions don't collide. OG never carries one — it ignores
+  // the control, so its exports are the same file at any setting.
+  const resSuffix =
+    s.resolution === "1280" || s.ratio === "og" ? "" : `--${s.resolution}`;
   const stem = `${baseName}--${s.axis}${suffix}${resSuffix}`;
 
   // The SVG is always the static adaptive dark/light pair.
