@@ -956,7 +956,9 @@ async function buildVariant(id) {
   // on, otherwise the static 1-bit PNG — WebP for the animated case, but PNG
   // kept for static so the still stays maximally portable (OG images etc.).
   const motion = s.scanOn || s.dissolveOn;
-  const image = motion ? await motionWebP(s) : variantPNG(s.tone, s.axis);
+  const image = motion
+    ? await motionWebP(s)
+    : await variantPNG(s.tone, s.axis);
   // Name the motion so exports are distinguishable: --scan, --load, or
   // --load-scan (both). Static stills carry no motion suffix.
   const animSuffix =
