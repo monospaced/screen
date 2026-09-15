@@ -140,6 +140,7 @@ function toolbar() {
     triggerIcon: "download",
     triggerLabel: "Download",
     triggerLabelVisibility: "hiddenBelowTablet",
+    triggerActivity: "idle",
     items: [
       { id: "png", label: "PNG / WebP" },
       { id: "svg", label: "SVG" },

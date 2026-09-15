@@ -59,26 +59,45 @@ let scanOn = false, // ambient scan sweep loop
   dissolveOn = true, // dissolve-in entrance on image load (Load on by default)
   pendingDissolve = false; // set on image load, consumed by render()
 const stage = document.getElementById("stage");
-// Current export blobs, keyed by menu item id; null until the first
-// treatment exists.
-const downloads = { png: null, svg: null };
+// True while a chosen download builds/saves. Serializes downloads: the choose
+// handler bails while it's set, so a second click can't race a build over one
+// already in flight.
+let downloading = false;
 
 const downloadMenu = document.getElementById("download");
-// Opening the menu is the intent-to-download signal: start the (possibly slow)
-// build now so it overlaps with the user reading the two items. The menu marks
-// itself open via data-open; a fresh, unchanged reopen reuses the cached build.
-new MutationObserver(() => {
-  if (downloadMenu.hasAttribute("data-open")) flushDownload();
-}).observe(downloadMenu, { attributes: true, attributeFilter: ["data-open"] });
+// Show/clear the trigger's busy state via the menu's reactive triggerActivity
+// prop (primed to "idle" in ui.mjs): "busy" swaps its icon for a spinner and
+// sets aria-disabled. Cosmetic/a11y only — `downloading` is the real guard.
+function setDownloading(on) {
+  downloading = on;
+  downloadMenu.triggerActivity = on ? "busy" : "idle";
+}
+// Build the picked variant on click and save it. Building is expensive (a motion
+// WebP is dozens of frame encodes), so it's lazy and on demand — one variant,
+// only when chosen.
 downloadMenu.addEventListener(SET_MENU_EVENT_CHOOSE, async (e) => {
   const { id } = e.detail;
-  await flushDownload(); // guarantee the export reflects the current settings
-  const file = downloads[id];
-  if (!file) return;
-  const a = document.createElement("a");
-  a.href = file.url;
-  a.download = file.name;
-  a.click();
+  if (downloading) return;
+  setDownloading(true);
+  try {
+    // buildVariant blocks the thread with a synchronous encode before it yields,
+    // and Set closes the menu only after this listener returns. Yield past a
+    // paint first so the menu closes and the spinner shows before that block;
+    // otherwise the popup lingers open long enough to click the other item.
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
+    const file = await buildVariant(id);
+    if (!file) return;
+    const url = URL.createObjectURL(file.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = file.name;
+    a.click();
+    // Revoke once the click has kicked off the save; an immediate revoke can
+    // cancel the download in some engines.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } finally {
+    setDownloading(false);
+  }
 });
 
 document.getElementById("axis").addEventListener("change", (e) => {
@@ -103,16 +122,15 @@ document.getElementById("scan").addEventListener("change", (e) => {
   if (scanOn) startMotion();
   else {
     stopMotion();
-    render(false); // repaint the settled base frame
+    render(); // repaint the settled base frame
   }
-  markDownloadStale(); // motion state changed → export needs a rebuild
 });
 document.getElementById("dissolve").addEventListener("change", (e) => {
   dissolveOn = e.target.checked;
   if (!img) return;
-  if (dissolveOn) startDissolve(); // toggling on previews the entrance
-  else render(false); // abandon any running dissolve, settle to base
-  markDownloadStale(); // motion state changed → export needs a rebuild
+  if (dissolveOn)
+    startDissolve(); // toggling on previews the entrance
+  else render(); // abandon any running dissolve, settle to base
 });
 
 document.getElementById("choose").onclick = () =>
@@ -201,7 +219,7 @@ stage.addEventListener("pointermove", (e) => {
     dragRenderQueued = true;
     requestAnimationFrame(() => {
       dragRenderQueued = false;
-      render(false);
+      render();
     });
   }
 });
@@ -210,7 +228,6 @@ function endDrag() {
   if (!dragging) return;
   dragging = false;
   outCanvas.classList.remove("dragging");
-  markDownloadStale();
 }
 stage.addEventListener("pointerup", endDrag);
 stage.addEventListener("pointercancel", endDrag);
@@ -225,7 +242,7 @@ stage.addEventListener("dblclick", () => {
 // Default image — treated on load, no empty state.
 loadImage(exampleUrl, "example");
 
-function render(updateDl = true) {
+function render() {
   const w = img.naturalWidth,
     h = img.naturalHeight;
   const RES = Number(resolution) / UPSCALE; // grid longest edge (dots)
@@ -322,7 +339,6 @@ function render(updateDl = true) {
   if (entrance) startDissolve();
   else if (scanOn) startMotion();
   else stopMotion();
-  if (updateDl) markDownloadStale();
 }
 
 // ---- Motion ----
@@ -640,7 +656,12 @@ function extractVP8L(webp) {
   const view = new DataView(webp.buffer, webp.byteOffset, webp.byteLength);
   let o = 12; // skip "RIFF" + size + "WEBP"
   while (o + 8 <= webp.length) {
-    const id = String.fromCharCode(webp[o], webp[o + 1], webp[o + 2], webp[o + 3]);
+    const id = String.fromCharCode(
+      webp[o],
+      webp[o + 1],
+      webp[o + 2],
+      webp[o + 3],
+    );
     const size = view.getUint32(o + 4, true);
     const advance = 8 + size + (size & 1);
     if (id === "VP8L") return webp.subarray(o, o + advance);
@@ -732,12 +753,25 @@ function webpFrame(lit, litPrev, Wc, Hc, up, pair) {
 // swap off it, and animated WebP fires no end event to detect). `isStale`
 // (optional) lets a newer rebuild abort this one mid-encode. Yields to the
 // event loop between batches so the main-thread encode never blocks the UI.
-async function encodeScreenWebP(lits, Wc, Hc, up, pair, loop, sweepMs, isStale) {
+async function encodeScreenWebP(
+  lits,
+  Wc,
+  Hc,
+  up,
+  pair,
+  loop,
+  sweepMs,
+  isStale,
+) {
   const W = Wc * up,
     H = Hc * up;
   const N = lits.length;
   const enc = async (data, w, h) =>
-    extractVP8L(new Uint8Array(await encodeWebpFrame({ data, width: w, height: h }, { lossless: 1 })));
+    extractVP8L(
+      new Uint8Array(
+        await encodeWebpFrame({ data, width: w, height: h }, { lossless: 1 }),
+      ),
+    );
   const parts = [];
   for (let k = 0; k < N; k++) {
     if (isStale?.()) return null; // superseded — stop wasting main-thread time
@@ -762,7 +796,10 @@ async function encodeScreenWebP(lits, Wc, Hc, up, pair, loop, sweepMs, isStale) 
     "VP8X",
     new Uint8Array([0x12, 0, 0, 0, ...u24(W - 1), ...u24(H - 1)]), // flags: animation + alpha
   );
-  const anim = webpChunk("ANIM", new Uint8Array([0, 0, 0, 0, loop & 255, (loop >> 8) & 255]));
+  const anim = webpChunk(
+    "ANIM",
+    new Uint8Array([0, 0, 0, 0, loop & 255, (loop >> 8) & 255]),
+  );
   const body = concatChunks([vp8x, anim, ...parts]);
   const riff = new Uint8Array(12 + body.length);
   const view = new DataView(riff.buffer);
@@ -782,10 +819,10 @@ function blobToDataURL(blob) {
 }
 
 // Re-treat the current crop for one tone, as 1-bit PNG bytes.
-function variantPNG(variantTone) {
+function variantPNG(variantTone, variantAxis) {
   const { rgb, Wc, Hc, up } = lastRender;
-  const out = screenCore(rgb, Wc, Hc, axis, variantTone);
-  const pair = SCREEN_PAIRS[variantTone][axis];
+  const out = screenCore(rgb, Wc, Hc, variantAxis, variantTone);
+  const pair = SCREEN_PAIRS[variantTone][variantAxis];
   return encodeScreenPNG(out, Wc, Hc, up, pair);
 }
 
@@ -801,15 +838,16 @@ const SCREEN_THEME_CSS =
   `:root:has(:target) .screen-light,:root:has(:target) .screen-dark{display:none}` +
   `:root:has(:target) :target{display:inline}`;
 
-async function adaptiveSvg() {
+async function adaptiveSvg(variantAxis) {
   const { Wc, Hc, up } = lastRender;
   const W = Wc * up,
     H = Hc * up;
   const [dark, lightVar] = await Promise.all(
-    [variantPNG("dark"), variantPNG("light")].map((p) =>
-      p.then((bytes) =>
-        blobToDataURL(new Blob([bytes], { type: "image/png" })),
-      ),
+    [variantPNG("dark", variantAxis), variantPNG("light", variantAxis)].map(
+      (p) =>
+        p.then((bytes) =>
+          blobToDataURL(new Blob([bytes], { type: "image/png" })),
+        ),
     ),
   );
   return (
@@ -847,7 +885,7 @@ const SCAN_FRAMES = 96,
   LOAD_FRAMES = 64;
 const LOAD_SCAN_FRAMES = { 640: 64, 1280: 32, 2560: 8 };
 
-async function motionWebP(isStale) {
+async function motionWebP({ axis, tone, scanOn, dissolveOn, resolution }) {
   const { rgb, Wc, Hc, up } = lastRender;
   const pair = SCREEN_PAIRS[tone][axis];
   const t = screenToneField(rgb, Wc, Hc);
@@ -889,81 +927,49 @@ async function motionWebP(isStale) {
   const loop = dissolveOn ? 1 : 0; // Load plays once; Scan loops forever
   // Total duration is exactly SCAN_SWEEP_MS — the Load entrance runs 5000ms,
   // which Set relies on to time the swap to the Scan loop.
-  return encodeScreenWebP(lits, Wc, Hc, up, pair, loop, SCAN_SWEEP_MS, isStale);
+  return encodeScreenWebP(lits, Wc, Hc, up, pair, loop, SCAN_SWEEP_MS);
 }
 
-// Successive calls can interleave (crop drag end vs radio change); the token
-// makes stale results drop out instead of clobbering newer ones.
-let dlToken = 0;
+// Build one export variant ("png" = raster slot, "svg" = adaptive pair) from a
+// snapshot of the current settings, returning its { blob, name } (null if nothing
+// is rendered yet). The snapshot keeps the file's bytes matching its name even if
+// a control changes mid-build.
+async function buildVariant(id) {
+  if (!lastRender) return null;
+  const s = { axis, tone, ratio, resolution, scanOn, dissolveOn };
+  const suffix = s.ratio === "default" ? "" : `--${s.ratio}`;
+  // Resolution suffix (empty for the 1280 default, like Ratio) so exports at
+  // different resolutions don't collide.
+  const resSuffix = s.resolution === "1280" ? "" : `--${s.resolution}`;
+  const stem = `${baseName}--${s.axis}${suffix}${resSuffix}`;
 
-// Rebuilding the export is expensive (the animated WebP is ~96 lossless frame
-// encodes) and most interactions never end in a download, so we never build on
-// control changes — a change just marks the current export stale. The build
-// runs lazily when the download menu is engaged: on open (see the observer by
-// the choose handler) so the encode overlaps with the user picking an item,
-// and awaited on choose as a guarantee a click can't hand back output that
-// lags the current settings. `dlPromise` caches the latest build, so reopening
-// the menu unchanged reuses it instantly.
-let dlDirty = true;
-let dlPromise = Promise.resolve();
-
-function markDownloadStale() {
-  dlDirty = true;
-}
-
-function flushDownload() {
-  if (dlDirty) {
-    dlDirty = false;
-    dlPromise = updateDownload();
+  // The SVG is always the static adaptive dark/light pair.
+  if (id === "svg") {
+    const svg = await adaptiveSvg(s.axis);
+    return {
+      blob: new Blob([svg], { type: "image/svg+xml" }),
+      name: `${stem}--adaptive.svg`,
+    };
   }
-  return dlPromise;
-}
 
-async function updateDownload() {
-  const token = ++dlToken;
-  const suffix = ratio === "default" ? "" : `--${ratio}`;
-  const motion = scanOn || dissolveOn;
-  // The raster slot is an animated lossless WebP (current tone) when a motion
-  // is on, otherwise the static 1-bit PNG — WebP for the animated case, but PNG
+  // The raster slot is an animated lossless WebP (current tone) when a motion is
+  // on, otherwise the static 1-bit PNG — WebP for the animated case, but PNG
   // kept for static so the still stays maximally portable (OG images etc.).
-  // The SVG is always the static adaptive dark/light pair. motionWebP yields
-  // between frame batches and bails if a newer rebuild supersedes this one
-  // (isStale), so a long encode never freezes the UI or clobbers fresh output.
-  const isStale = () => token !== dlToken;
-  const [image, svg] = await Promise.all([
-    motion ? motionWebP(isStale) : variantPNG(tone),
-    adaptiveSvg(),
-  ]);
-  if (token !== dlToken || image == null) return;
-  const toneSuffix = `--${tone}`; // tone (Set's light/dark scheme) goes last
+  const motion = s.scanOn || s.dissolveOn;
+  const image = motion ? await motionWebP(s) : variantPNG(s.tone, s.axis);
   // Name the motion so exports are distinguishable: --scan, --load, or
   // --load-scan (both). Static stills carry no motion suffix.
   const animSuffix =
-    scanOn && dissolveOn
+    s.scanOn && s.dissolveOn
       ? "--load-scan"
-      : dissolveOn
+      : s.dissolveOn
         ? "--load"
-        : scanOn
+        : s.scanOn
           ? "--scan"
           : "";
-  const imageExt = motion ? "webp" : "png";
-  const imageType = motion ? "image/webp" : "image/png";
-  // Resolution suffix (empty for the 1280 default, like Ratio) so exports at
-  // different resolutions don't collide.
-  const resSuffix = resolution === "1280" ? "" : `--${resolution}`;
-  for (const [id, blob, name] of [
-    [
-      "png",
-      new Blob([image], { type: imageType }),
-      `${baseName}--${axis}${suffix}${resSuffix}${animSuffix}${toneSuffix}.${imageExt}`,
-    ],
-    [
-      "svg",
-      new Blob([svg], { type: "image/svg+xml" }),
-      `${baseName}--${axis}${suffix}${resSuffix}--adaptive.svg`,
-    ],
-  ]) {
-    if (downloads[id]) URL.revokeObjectURL(downloads[id].url);
-    downloads[id] = { url: URL.createObjectURL(blob), name };
-  }
+  const toneSuffix = `--${s.tone}`; // tone (Set's light/dark scheme) goes last
+  return {
+    blob: new Blob([image], { type: motion ? "image/webp" : "image/png" }),
+    name: `${stem}${animSuffix}${toneSuffix}.${motion ? "webp" : "png"}`,
+  };
 }
