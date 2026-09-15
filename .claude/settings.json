@@ -93,6 +93,8 @@
   "sandbox": {
     "enabled": true,
     "excludedCommands": [
+      "gh",
+      "gh *",
       "git fetch",
       "git fetch *",
       "git pull",
