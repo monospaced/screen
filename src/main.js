@@ -106,6 +106,9 @@ document.getElementById("axis").addEventListener("change", (e) => {
 });
 document.getElementById("ratio").addEventListener("change", (e) => {
   ratio = e.target.value;
+  // OG is always the fixed 1200×630 social-card size — the Resolution control
+  // has no effect on it, so the whole fieldset disables while it's selected.
+  document.getElementById("resolution").disabled = ratio === "og";
   if (img) render();
 });
 document.getElementById("tone").addEventListener("change", (e) => {
@@ -139,15 +142,25 @@ document.getElementById("file").onchange = (e) => {
   const f = e.target.files[0];
   if (!f) return;
   loadImage(URL.createObjectURL(f), f.name.replace(/\.[^.]+$/, ""));
+  // Clear the input so choosing the same file again refires change — e.g.
+  // retrying after a failed load.
+  e.target.value = "";
 };
 
 function loadImage(src, name) {
-  baseName = name;
-  cropX = 0.5;
-  cropY = 0.5;
-  pendingDissolve = true; // entrance plays on the load's first render
   const im = new Image();
+  // Once the load settles the object URL can go (revoking a plain URL, like
+  // the demo asset's, is a no-op) — otherwise each opened file leaks its blob
+  // for the session's lifetime.
+  im.onerror = () => URL.revokeObjectURL(src);
+  // All state commits on success — a failed load (corrupt/unsupported file)
+  // must not leave the old image with a new name and a pending entrance.
   im.onload = () => {
+    URL.revokeObjectURL(src);
+    baseName = name;
+    cropX = 0.5;
+    cropY = 0.5;
+    pendingDissolve = true; // entrance plays on the load's first render
     img = im;
     render();
   };
@@ -300,10 +313,13 @@ function render() {
     rgb[i * 3 + 2] = src[i * 4 + 2];
   }
   // pair rides along for Motion, which repaints frames on the displayed
-  // treatment's two endpoints.
-  lastRender = { rgb, Wc, Hc, up, pair: SCREEN_PAIRS[tone][axis] };
+  // treatment's two endpoints. The tone field (axis/tone-independent) is
+  // computed once per crop here and reused everywhere — the treatment below,
+  // the motion frames, and the export variants.
+  const t = screenToneField(rgb, Wc, Hc);
+  lastRender = { rgb, Wc, Hc, up, t, pair: SCREEN_PAIRS[tone][axis] };
 
-  const out = screenCore(rgb, Wc, Hc, axis, tone);
+  const out = screenCore(rgb, Wc, Hc, axis, tone, t);
 
   const grid = gx.createImageData(Wc, Hc);
   for (let i = 0; i < Wc * Hc; i++) {
@@ -391,7 +407,7 @@ function stopMotion() {
 // Shared frame state for the scan loop and the dissolve entrance: an offscreen
 // grid-size canvas and the tone field of the current crop.
 function buildAnim() {
-  const { rgb, Wc, Hc } = lastRender;
+  const { Wc, Hc, t } = lastRender;
   const canvas = document.createElement("canvas");
   canvas.width = Wc;
   canvas.height = Hc;
@@ -402,7 +418,7 @@ function buildAnim() {
     canvas,
     ctx,
     image,
-    t: screenToneField(rgb, Wc, Hc),
+    t,
     start: 0,
     raf: 0,
   };
@@ -416,8 +432,13 @@ function blitAnim() {
 }
 
 function startMotion() {
+  // Keep the sweep phase across restarts (control changes, crop-drag
+  // re-renders): carrying `start` over means elapsed — and so the band
+  // position — continues instead of jumping back to the top.
+  const start = anim ? anim.start : 0;
   stopMotion();
   buildAnim();
+  anim.start = start;
   anim.raf = requestAnimationFrame(motionFrame);
 }
 
@@ -604,20 +625,13 @@ async function encodeScreenPNG(out, Wc, Hc, up, pair) {
   const shadow = pair[0],
     high = pair[1];
   const raw = screenRaw(out, Wc, Hc, up, pair);
-  const parts = [
+  return concatChunks([
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
     pngChunk("IHDR", ihdrIndexed(W, H)),
     pngChunk("PLTE", new Uint8Array([...shadow, ...high])),
     pngChunk("IDAT", await deflate(raw)),
     pngChunk("IEND", new Uint8Array(0)),
-  ];
-  const bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
-  let offset = 0;
-  for (const p of parts) {
-    bytes.set(p, offset);
-    offset += p.length;
-  }
-  return bytes;
+  ]);
 }
 
 function concatChunks(parts) {
@@ -750,19 +764,9 @@ function webpFrame(lit, litPrev, Wc, Hc, up, pair) {
 // loops forever; sweepMs is the total animation duration — per-frame durations
 // are distributed so they sum to it *exactly* (round the cumulative time, not
 // each frame), so the total is a clean contract value (Set times the Load→Scan
-// swap off it, and animated WebP fires no end event to detect). `isStale`
-// (optional) lets a newer rebuild abort this one mid-encode. Yields to the
+// swap off it, and animated WebP fires no end event to detect). Yields to the
 // event loop between batches so the main-thread encode never blocks the UI.
-async function encodeScreenWebP(
-  lits,
-  Wc,
-  Hc,
-  up,
-  pair,
-  loop,
-  sweepMs,
-  isStale,
-) {
+async function encodeScreenWebP(lits, Wc, Hc, up, pair, loop, sweepMs) {
   const W = Wc * up,
     H = Hc * up;
   const N = lits.length;
@@ -774,7 +778,6 @@ async function encodeScreenWebP(
     );
   const parts = [];
   for (let k = 0; k < N; k++) {
-    if (isStale?.()) return null; // superseded — stop wasting main-thread time
     // Drift-free: frame k spans the gap between two rounded cumulative times,
     // so the durations sum to round(sweepMs) with no accumulated rounding error.
     const ms =
@@ -820,8 +823,8 @@ function blobToDataURL(blob) {
 
 // Re-treat the current crop for one tone, as 1-bit PNG bytes.
 function variantPNG(variantTone, variantAxis) {
-  const { rgb, Wc, Hc, up } = lastRender;
-  const out = screenCore(rgb, Wc, Hc, variantAxis, variantTone);
+  const { rgb, Wc, Hc, up, t } = lastRender;
+  const out = screenCore(rgb, Wc, Hc, variantAxis, variantTone, t);
   const pair = SCREEN_PAIRS[variantTone][variantAxis];
   return encodeScreenPNG(out, Wc, Hc, up, pair);
 }
@@ -879,16 +882,17 @@ async function adaptiveSvg(variantAxis) {
 //     full frame count Safari can't decode on schedule — at 1280 it stretches a
 //     5s entrance to ~11s (Chrome plays it true). Decode cost scales with pixels
 //     (∝ resolution²), so the safe frame count scales inversely: quartering the
-//     pixels lets us quadruple the frames. Keyed off the Resolution control, all
-//     three confirmed to play ~5s in Safari (2560 is a coarse 8-step dissolve).
+//     pixels lets us quadruple the frames. Keyed off the output's longest edge
+//     (the Resolution control everywhere but OG, whose fixed 1200 width slots
+//     into the 1280 class), all three confirmed to play ~5s in Safari (2560 is
+//     a coarse 8-step dissolve).
 const SCAN_FRAMES = 96,
   LOAD_FRAMES = 64;
-const LOAD_SCAN_FRAMES = { 640: 64, 1280: 32, 2560: 8 };
+const loadScanFrames = (edge) => (edge <= 640 ? 64 : edge <= 1280 ? 32 : 8);
 
-async function motionWebP({ axis, tone, scanOn, dissolveOn, resolution }) {
-  const { rgb, Wc, Hc, up } = lastRender;
+async function motionWebP({ axis, tone, scanOn, dissolveOn }) {
+  const { Wc, Hc, up, t } = lastRender;
   const pair = SCREEN_PAIRS[tone][axis];
-  const t = screenToneField(rgb, Wc, Hc);
   const sigma = SCAN_WIDTH * Hc;
   // One frame's grid-resolution 0/1 bitmap: scan band centred at row yc (or
   // none), gated by dissolve progress reveal (1 = fully revealed).
@@ -910,11 +914,11 @@ async function motionWebP({ axis, tone, scanOn, dissolveOn, resolution }) {
     return lit;
   };
   // Load+Scan is capped for Safari's decode budget (it's the timing-critical,
-  // hidden-after-5s case) per the active resolution; Load-only stays smooth;
+  // hidden-after-5s case) per the actual output size; Load-only stays smooth;
   // pure Scan uses its own count.
   const N = dissolveOn
     ? scanOn
-      ? LOAD_SCAN_FRAMES[resolution]
+      ? loadScanFrames(Math.max(Wc, Hc) * up)
       : LOAD_FRAMES
     : SCAN_FRAMES;
   const lits = [];
@@ -939,8 +943,10 @@ async function buildVariant(id) {
   const s = { axis, tone, ratio, resolution, scanOn, dissolveOn };
   const suffix = s.ratio === "default" ? "" : `--${s.ratio}`;
   // Resolution suffix (empty for the 1280 default, like Ratio) so exports at
-  // different resolutions don't collide.
-  const resSuffix = s.resolution === "1280" ? "" : `--${s.resolution}`;
+  // different resolutions don't collide. OG never carries one — it ignores
+  // the control, so its exports are the same file at any setting.
+  const resSuffix =
+    s.resolution === "1280" || s.ratio === "og" ? "" : `--${s.resolution}`;
   const stem = `${baseName}--${s.axis}${suffix}${resSuffix}`;
 
   // The SVG is always the static adaptive dark/light pair.
@@ -956,7 +962,7 @@ async function buildVariant(id) {
   // on, otherwise the static 1-bit PNG — WebP for the animated case, but PNG
   // kept for static so the still stays maximally portable (OG images etc.).
   const motion = s.scanOn || s.dissolveOn;
-  const image = motion ? await motionWebP(s) : variantPNG(s.tone, s.axis);
+  const image = motion ? await motionWebP(s) : await variantPNG(s.tone, s.axis);
   // Name the motion so exports are distinguishable: --scan, --load, or
   // --load-scan (both). Static stills carry no motion suffix.
   const animSuffix =
