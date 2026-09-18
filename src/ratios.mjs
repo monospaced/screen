@@ -11,5 +11,6 @@ export const RATIOS = [
   { key: "3x2", label: "3:2", ar: 3 / 2 },
   { key: "16x9", label: "16:9", ar: 16 / 9 },
   { key: "21x9", label: "21:9", ar: 21 / 9 },
+  { key: "3x1", label: "3:1", ar: 3 },
   { key: "og", label: "OG", ar: 1200 / 630 },
 ];
