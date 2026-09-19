@@ -41,48 +41,58 @@ function sidebar() {
     background: "panel",
     paddingBlock: "md",
     paddingInline: "md",
-    children: renderSetStack({
+    // Two columns: Color, Ratio, Resolution, Tone | Motion.
+    children: renderSetInline({
+      align: "start",
       gap: "md",
+      nowrap: true,
       children:
-        renderSetRadios({
-          id: "axis",
-          name: "axis",
-          legend: "Color",
-          size: "sm",
-          value: AXES[0].key,
-          radios: AXES.map(({ key, label }) => ({ label, value: key })),
-        }) +
-        renderSetRadios({
-          id: "ratio",
-          name: "ratio",
-          legend: "Ratio",
-          size: "sm",
-          value: "default",
-          radios: RATIOS.map(({ key, label }) => ({ label, value: key })),
-        }) +
-        renderSetRadios({
-          id: "resolution",
-          name: "resolution",
-          legend: "Resolution",
-          size: "sm",
-          value: "1280",
-          radios: [
-            { label: "640", value: "640" },
-            { label: "1280", value: "1280" },
-            { label: "2560", value: "2560" },
-          ],
-        }) +
-        renderSetRadios({
-          id: "tone",
-          name: "tone",
-          legend: "Tone",
-          size: "sm",
-          value: "mid",
-          radios: [
-            { label: "Dark", value: "dark" },
-            { label: "Mid", value: "mid" },
-            { label: "Light", value: "light" },
-          ],
+        renderSetStack({
+          gap: "md",
+          children:
+            renderSetRadios({
+              id: "axis",
+              name: "axis",
+              legend: "Color",
+              size: "sm",
+              value: AXES[0].key,
+              radios: AXES.map(({ key, label }) => ({ label, value: key })),
+            }) +
+            renderSetRadios({
+              id: "ratio",
+              name: "ratio",
+              legend: "Ratio",
+              size: "sm",
+              value: "default",
+              radios: RATIOS.map(({ key, label }) => ({ label, value: key })),
+            }) +
+            renderSetRadios({
+              id: "resolution",
+              name: "resolution",
+              legend: "Resolution",
+              size: "sm",
+              value: "1280",
+              radios: [
+                { label: "480", value: "480" },
+                { label: "640", value: "640" },
+                { label: "960", value: "960" },
+                { label: "1280", value: "1280" },
+                { label: "1920", value: "1920" },
+                { label: "2560", value: "2560" },
+              ],
+            }) +
+            renderSetRadios({
+              id: "tone",
+              name: "tone",
+              legend: "Tone",
+              size: "sm",
+              value: "mid",
+              radios: [
+                { label: "Dark", value: "dark" },
+                { label: "Mid", value: "mid" },
+                { label: "Light", value: "light" },
+              ],
+            }),
         }) +
         renderSetFieldset({
           id: "motion",
