@@ -31,8 +31,11 @@ defineSetMenu();
 
 const { screenCore, screenToneField, SCREEN_PAIRS, SCREEN_BAYER } = globalThis;
 // Output = grid (RES) × UPSCALE. UPSCALE stays 2 (the hard 2×2 "dot"); the
-// Resolution control varies the grid, so 640/1280/2560 = grid 320/640/1280
-// dots. Constant dot size, more dots = finer. RES fixes the output WIDTH for
+// Resolution control varies the grid, so 480/640/960/1280/1920/2560 = grid
+// 240/320/480/640/960/1280 dots. Constant dot size, more dots = finer. The
+// doubling sizes (640/1280/2560) swing the rendered dot 1→2 CSS px across a
+// responsive band — good when the image leads; the in-between sizes let a
+// band sit nearer 2 when texture and motion lead. RES fixes the output WIDTH for
 // the aspect presets — a portrait ratio just runs taller (4:5 at res 1280 is
 // 1280×1600) — and the longest edge for the free-form default. Grid is derived
 // per render from `resolution`; the OG preset keeps its fixed 1200×630.
@@ -42,7 +45,7 @@ const UPSCALE = 2,
 let axis = "cyan",
   tone = "mid",
   ratio = "default",
-  resolution = "1280", // output longest edge in px: "640" | "1280" | "2560"
+  resolution = "1280", // output longest edge in px: "480" | "640" | "960" | "1280" | "1920" | "2560"
   img = null,
   baseName = "image";
 // Crop position for the aspect-ratio presets, as fractions of the crop slack
@@ -271,7 +274,7 @@ function render() {
       Hc = OG_H / 2; // fixed OG size: 600x315 grid, x2 -> 1200x630
     } else {
       Wc = RES;
-      Hc = Math.max(1, Math.round(RES / preset.ar)); // x2 -> 1280 wide
+      Hc = Math.max(1, Math.round(RES / preset.ar)); // x2 -> `resolution` wide
     }
     up = UPSCALE;
     g.width = Wc;
@@ -884,11 +887,19 @@ async function adaptiveSvg(variantAxis) {
 //     (∝ resolution²), so the safe frame count scales inversely: quartering the
 //     pixels lets us quadruple the frames. Keyed off the output's longest edge
 //     (the Resolution control everywhere but OG, whose fixed 1200 width slots
-//     into the 1280 class), all three confirmed to play ~5s in Safari (2560 is
-//     a coarse 8-step dissolve).
+//     into the 1280 class). 640/1280/1920/2560 are confirmed to play ~5s in
+//     Safari (2560 is a coarse 8-step dissolve); the 960 class is interpolated
+//     from that ∝ 1/edge² budget (well inside it), not yet measured.
 const SCAN_FRAMES = 96,
   LOAD_FRAMES = 64;
-const loadScanFrames = (edge) => (edge <= 640 ? 64 : edge <= 1280 ? 32 : 8);
+const LOAD_SCAN_FRAMES = [
+  [640, 64],
+  [960, 48],
+  [1280, 32],
+  [1920, 16],
+];
+const loadScanFrames = (edge) =>
+  LOAD_SCAN_FRAMES.find(([max]) => edge <= max)?.[1] ?? 8;
 
 async function motionWebP({ axis, tone, scanOn, dissolveOn }) {
   const { Wc, Hc, up, t } = lastRender;
