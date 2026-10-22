@@ -12,24 +12,24 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0
       '@monospaced/set-assets':
-        specifier: ^0.16.0
-        version: 0.16.0
+        specifier: ^0.20.1
+        version: 0.20.1
       '@monospaced/set-core':
-        specifier: ^0.16.0
-        version: 0.16.0
+        specifier: ^0.20.1
+        version: 0.20.1
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.8.0)
       '@monospaced/set-config':
-        specifier: ^0.16.0
-        version: 0.16.0(eslint@10.8.0)(stylelint@17.14.1)
+        specifier: ^0.20.1
+        version: 0.20.1(eslint@10.8.0)(stylelint@17.14.1)
       '@monospaced/set-skills':
-        specifier: ^0.16.0
-        version: 0.16.0
+        specifier: ^0.20.1
+        version: 0.20.1
       '@monospaced/set-tokens':
-        specifier: ^0.16.0
-        version: 0.16.0
+        specifier: ^0.20.1
+        version: 0.20.1
       eslint:
         specifier: ^10.8.0
         version: 10.8.0
@@ -177,23 +177,26 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@monospaced/set-assets@0.16.0':
-    resolution: {integrity: sha512-yjAXwmF13yBO7S/kXRicuIS0K0bp1WvMRvx0IQrW+vpuyaXwMz+yOFss33DpZlNooZV0YF8v7jcH3r8MiOey0w==}
+  '@monospaced/set-assets@0.20.1':
+    resolution: {integrity: sha512-Tj+eMaVwF9xj9/LEEwHKG3ZARP5WwdLy0NP85Gky84TvBrwu05FLpmmGsXCMXFhx3t9wuTWKg+5H+N29kgZqdw==}
 
-  '@monospaced/set-config@0.16.0':
-    resolution: {integrity: sha512-vnFYl33lMbqL5FEbNZhG7JkyP8kDIbJ88gpMViuC/oHu0KK+awT8/bR9dHdMw2fgstG1OCV/brJGpEa3JHAl9A==}
+  '@monospaced/set-config@0.20.1':
+    resolution: {integrity: sha512-RwK884LtADutWqoo3qard7CNdTtJz5bUbqZ6mRJS8qrrQGv1sLJOQ75GebYEcXq827s8phhdRykzZ49ng9UKWg==}
     peerDependencies:
       eslint: ^10.0.0
       stylelint: ^17.0.0
 
-  '@monospaced/set-core@0.16.0':
-    resolution: {integrity: sha512-ynm/PXGKn0Pe+Eq5OFcq6vycsmHXGBqiUKsm7J2Ll99Yw1/CtS1SJbKLT7a8r2RvuF7vErriKylsCSsOuBiVHw==}
+  '@monospaced/set-core@0.20.1':
+    resolution: {integrity: sha512-rYM9z4O6rJf2QbujcqX57q8MJ/tsYAHs5f276d8oT23V8h21FXB13NgPUwzYN6h2jgAlEXWFx14IjCfG7t4LMw==}
 
-  '@monospaced/set-skills@0.16.0':
-    resolution: {integrity: sha512-KvEyrFNTblGdtlvbj2L9VDHRHa4TeT26zlKlNM2iFewAGy64Cawen5Rt0IuXNXK3jUmwGuUQgZVjgJCfqESnMw==}
+  '@monospaced/set-icons@0.20.1':
+    resolution: {integrity: sha512-WKBOrHK3cbhK+1wch2gzhcbXVK7ZfaMI81S1gXDjZ8/xUMyswq2BF/9ivmJQkcrWxyRHj9bh4H3JtRtBgO9uJA==}
 
-  '@monospaced/set-tokens@0.16.0':
-    resolution: {integrity: sha512-Ss7Tq59G/OrSpmaf1ViAHISBgfRhvyfOKUqWuZRuzh/YVxAkH35v1oHSz5E8rzX1pLDEkdeq+1o8wNzheGdNZg==}
+  '@monospaced/set-skills@0.20.1':
+    resolution: {integrity: sha512-D3Owg43FlaXWXJDJIqibeyEIb3DQaQgZhU99zPF/rvidhwF0gx/b6eImeiYZsOM93ZFFmcHeP8dxTGsp8jM2xg==}
+
+  '@monospaced/set-tokens@0.20.1':
+    resolution: {integrity: sha512-l5TwKuuYGBQ6OXpJ8bMFWqykMRDTMO8QSB97m6ROmQ0wfyDb82KNAShCnCivgc6o4LcOp9U9+Pio0JgFA0x1Gg==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -988,9 +991,6 @@ packages:
     resolution: {integrity: sha512-9kY+CygyYM6j02t5YFHbNz2FN5QmYGv9zAjVp4lCDjlCw7amdckXlEt/bjMhUIfj4ThGRE4gCUH5+yGnNuPo5A==}
     engines: {node: '>=10.0.0'}
 
-  tdesign-icons-svg@0.4.5:
-    resolution: {integrity: sha512-TPnCjvKYIMXeqPuXDsd6MjT3WqFWanlB63EU6U1MDz9GO1zYg3vb2oZwhpmD0VpIap12u8H8fUbNze9AahGooQ==}
-
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
@@ -1192,9 +1192,9 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@monospaced/set-assets@0.16.0': {}
+  '@monospaced/set-assets@0.20.1': {}
 
-  '@monospaced/set-config@0.16.0(eslint@10.8.0)(stylelint@17.14.1)':
+  '@monospaced/set-config@0.20.1(eslint@10.8.0)(stylelint@17.14.1)':
     dependencies:
       eslint: 10.8.0
       eslint-plugin-simple-import-sort: 13.0.0(eslint@10.8.0)
@@ -1204,13 +1204,15 @@ snapshots:
       stylelint-order: 8.1.1(stylelint@17.14.1)
       stylelint-plugin-logical-css: 2.1.0(stylelint@17.14.1)
 
-  '@monospaced/set-core@0.16.0':
+  '@monospaced/set-core@0.20.1':
     dependencies:
-      tdesign-icons-svg: 0.4.5
+      '@monospaced/set-icons': 0.20.1
 
-  '@monospaced/set-skills@0.16.0': {}
+  '@monospaced/set-icons@0.20.1': {}
 
-  '@monospaced/set-tokens@0.16.0': {}
+  '@monospaced/set-skills@0.20.1': {}
+
+  '@monospaced/set-tokens@0.20.1': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -1920,8 +1922,6 @@ snapshots:
       slice-ansi: 4.0.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
-
-  tdesign-icons-svg@0.4.5: {}
 
   tinyglobby@0.2.17:
     dependencies:
