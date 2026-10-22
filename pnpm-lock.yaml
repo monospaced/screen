@@ -12,24 +12,24 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0
       '@monospaced/set-assets':
-        specifier: ^0.20.1
-        version: 0.20.1
+        specifier: ^0.20.2
+        version: 0.20.2
       '@monospaced/set-core':
-        specifier: ^0.20.1
-        version: 0.20.1
+        specifier: ^0.20.2
+        version: 0.20.2
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.8.0)
       '@monospaced/set-config':
-        specifier: ^0.20.1
-        version: 0.20.1(eslint@10.8.0)(stylelint@17.14.1)
+        specifier: ^0.20.2
+        version: 0.20.2(eslint@10.8.0)(stylelint@17.14.1)
       '@monospaced/set-skills':
-        specifier: ^0.20.1
-        version: 0.20.1
+        specifier: ^0.20.2
+        version: 0.20.2
       '@monospaced/set-tokens':
-        specifier: ^0.20.1
-        version: 0.20.1
+        specifier: ^0.20.2
+        version: 0.20.2
       eslint:
         specifier: ^10.8.0
         version: 10.8.0
@@ -177,26 +177,26 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@monospaced/set-assets@0.20.1':
-    resolution: {integrity: sha512-Tj+eMaVwF9xj9/LEEwHKG3ZARP5WwdLy0NP85Gky84TvBrwu05FLpmmGsXCMXFhx3t9wuTWKg+5H+N29kgZqdw==}
+  '@monospaced/set-assets@0.20.2':
+    resolution: {integrity: sha512-5FK8k+zTtF6PmxCYYI3UGD5mPNE4YU94AuEJpTpqNRa4MRxgUla7nIu5fb6YagTCjjziVKe+rm86yXkn42VV8A==}
 
-  '@monospaced/set-config@0.20.1':
-    resolution: {integrity: sha512-RwK884LtADutWqoo3qard7CNdTtJz5bUbqZ6mRJS8qrrQGv1sLJOQ75GebYEcXq827s8phhdRykzZ49ng9UKWg==}
+  '@monospaced/set-config@0.20.2':
+    resolution: {integrity: sha512-nK7FowRxrfRJIRlqMSiiS/yrdtQwgvhXxeg6RUErScKXPxasKOdtEDn6JLQymbcOlVoncuc5P2LtXLKAM4loKg==}
     peerDependencies:
       eslint: ^10.0.0
       stylelint: ^17.0.0
 
-  '@monospaced/set-core@0.20.1':
-    resolution: {integrity: sha512-rYM9z4O6rJf2QbujcqX57q8MJ/tsYAHs5f276d8oT23V8h21FXB13NgPUwzYN6h2jgAlEXWFx14IjCfG7t4LMw==}
+  '@monospaced/set-core@0.20.2':
+    resolution: {integrity: sha512-XcAM8DNvqejsIDUSVCIzpU1tLuqm6PVjhFJ7tHxOE4vYfFDZOw4W8cqlx+gc1Ix72jXDGFKEi/Czlez4ZtJd9Q==}
 
-  '@monospaced/set-icons@0.20.1':
-    resolution: {integrity: sha512-WKBOrHK3cbhK+1wch2gzhcbXVK7ZfaMI81S1gXDjZ8/xUMyswq2BF/9ivmJQkcrWxyRHj9bh4H3JtRtBgO9uJA==}
+  '@monospaced/set-icons@0.20.2':
+    resolution: {integrity: sha512-GDUg5rCxEI3Jhj2e8sTNjTyEsFY7EFTRuwXuhJT8/0TEmQHYI8/3En2oQE1UKu7kkzJNv20D4F6Rq0InrQ/2RA==}
 
-  '@monospaced/set-skills@0.20.1':
-    resolution: {integrity: sha512-D3Owg43FlaXWXJDJIqibeyEIb3DQaQgZhU99zPF/rvidhwF0gx/b6eImeiYZsOM93ZFFmcHeP8dxTGsp8jM2xg==}
+  '@monospaced/set-skills@0.20.2':
+    resolution: {integrity: sha512-OvQ0IuuSENqGGAhuSqD5RUP7lT6DpH6Twg0htXZxh9IEA2VRoItmvFgg1aHGdkD3CETz/LCv/sGa8xESTL0m6w==}
 
-  '@monospaced/set-tokens@0.20.1':
-    resolution: {integrity: sha512-l5TwKuuYGBQ6OXpJ8bMFWqykMRDTMO8QSB97m6ROmQ0wfyDb82KNAShCnCivgc6o4LcOp9U9+Pio0JgFA0x1Gg==}
+  '@monospaced/set-tokens@0.20.2':
+    resolution: {integrity: sha512-IVRkUmFv1C+ZzB9HP2T61EaFOrLRtD/PzI6hyTsLc3O49DcbyFSP9rf9UEdpr9OPALjLt8+SEC6CzAC7saG1XQ==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -1192,9 +1192,9 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@monospaced/set-assets@0.20.1': {}
+  '@monospaced/set-assets@0.20.2': {}
 
-  '@monospaced/set-config@0.20.1(eslint@10.8.0)(stylelint@17.14.1)':
+  '@monospaced/set-config@0.20.2(eslint@10.8.0)(stylelint@17.14.1)':
     dependencies:
       eslint: 10.8.0
       eslint-plugin-simple-import-sort: 13.0.0(eslint@10.8.0)
@@ -1204,15 +1204,15 @@ snapshots:
       stylelint-order: 8.1.1(stylelint@17.14.1)
       stylelint-plugin-logical-css: 2.1.0(stylelint@17.14.1)
 
-  '@monospaced/set-core@0.20.1':
+  '@monospaced/set-core@0.20.2':
     dependencies:
-      '@monospaced/set-icons': 0.20.1
+      '@monospaced/set-icons': 0.20.2
 
-  '@monospaced/set-icons@0.20.1': {}
+  '@monospaced/set-icons@0.20.2': {}
 
-  '@monospaced/set-skills@0.20.1': {}
+  '@monospaced/set-skills@0.20.2': {}
 
-  '@monospaced/set-tokens@0.20.1': {}
+  '@monospaced/set-tokens@0.20.2': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

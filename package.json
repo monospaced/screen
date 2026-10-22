@@ -17,14 +17,14 @@
   },
   "dependencies": {
     "@jsquash/webp": "^1.5.0",
-    "@monospaced/set-assets": "^0.20.1",
-    "@monospaced/set-core": "^0.20.1"
+    "@monospaced/set-assets": "^0.20.2",
+    "@monospaced/set-core": "^0.20.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@monospaced/set-config": "^0.20.1",
-    "@monospaced/set-skills": "^0.20.1",
-    "@monospaced/set-tokens": "^0.20.1",
+    "@monospaced/set-config": "^0.20.2",
+    "@monospaced/set-skills": "^0.20.2",
+    "@monospaced/set-tokens": "^0.20.2",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
     "prettier": "^3.9.6",
