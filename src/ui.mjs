@@ -35,7 +35,7 @@ function sidebar() {
   const header = renderSetBox({
     paddingBlock: "none",
     paddingInline: "sm",
-    children: `<a href="/">${renderSetHeading({ size: "md", text: "Screen" })}</a>`,
+    children: `<a href="/">${renderSetHeading({ size: "md", children: "Screen" })}</a>`,
   });
   const content = renderSetBox({
     background: "panel",
@@ -131,7 +131,7 @@ function toolbar() {
     gap: "sm",
     children:
       sidebar() +
-      `<a href="/" style="display: block; margin-block: var(--set-spacing-vertical-250)">${renderSetHeading({ size: "md", text: "Screen" })}</a>`,
+      `<a href="/" style="display: block; margin-block: var(--set-spacing-vertical-250)">${renderSetHeading({ size: "md", children: "Screen" })}</a>`,
   });
   const choose = renderSetButton({
     appearance: "outline",
